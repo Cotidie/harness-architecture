@@ -88,6 +88,32 @@ class BoundaryViolationTests(unittest.TestCase):
         public = [n for n in vars(BoundaryViolation) if not n.startswith("_")]
         self.assertEqual(public, [])
 
+    def test_parse_error_rule_kind_constructs_and_is_frozen(self):
+        # parse_error reuses the existing contract: no new field, no new class.
+        v = BoundaryViolation(
+            source_module="adapters",
+            target_module="adapters",
+            rule_kind="parse_error",
+            file_path="src/adapters/boundaries/broken.py",
+            line=3,
+        )
+        self.assertEqual(v.rule_kind, "parse_error")
+        self.assertEqual(v.file_path, "src/adapters/boundaries/broken.py")
+        self.assertEqual(v.line, 3)
+        # Equality is value-based.
+        self.assertEqual(
+            v,
+            BoundaryViolation(
+                "adapters",
+                "adapters",
+                "parse_error",
+                "src/adapters/boundaries/broken.py",
+                3,
+            ),
+        )
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            v.rule_kind = "must_not_depend_on"
+
 
 if __name__ == "__main__":
     unittest.main()

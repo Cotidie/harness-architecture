@@ -18,8 +18,22 @@ class BoundariesConfigError(Exception):
 
 
 def load_module_rules(boundaries_path: str) -> Tuple[ModuleRule, ...]:
-    with open(boundaries_path, "r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle)
+    try:
+        with open(boundaries_path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+    except FileNotFoundError as exc:
+        raise BoundariesConfigError(
+            "boundaries file not found: %s" % (boundaries_path,)
+        ) from exc
+    except OSError as exc:
+        raise BoundariesConfigError(
+            "could not read boundaries file %s: %s"
+            % (boundaries_path, exc)
+        ) from exc
+    except yaml.YAMLError as exc:
+        raise BoundariesConfigError(
+            "boundaries file is not valid YAML: %s" % (exc,)
+        ) from exc
 
     if not isinstance(data, dict):
         raise BoundariesConfigError(

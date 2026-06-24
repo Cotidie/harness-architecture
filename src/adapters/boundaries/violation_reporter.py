@@ -6,6 +6,13 @@ from src.contracts.boundaries.boundary_violation import BoundaryViolation
 
 
 def format_violation(violation: BoundaryViolation) -> str:
+    if violation.rule_kind == "parse_error":
+        # A parse failure reuses the BoundaryViolation contract; render it as a
+        # could-not-parse finding rather than a source -> target dependency.
+        return (
+            "%s:%d: parse_error: could not parse file (syntax error)"
+            % (violation.file_path, violation.line)
+        )
     return (
         "%s:%d: %s -> %s violates %s"
         % (
