@@ -34,7 +34,7 @@ has real drift to classify and the linter has a known violation to be aimed at.
 **Stack decision (locked here, was deferred from iteration 1): Python.** The lint target
 (`sample/`) is Python and the linter must parse Python imports (stdlib `ast`), so a Python
 linter is the coherent choice. This locks the real `src/` module map that
-`architecture/boundaries.yaml` described as placeholder.
+`.architecture/boundaries.yaml` described as placeholder.
 
 ## Global Constraints (from `docs/01-harness-mvp-plan.md`)
 
@@ -44,7 +44,7 @@ linter is the coherent choice. This locks the real `src/` module map that
 - New boundary data must propose a contract class; new business behavior must propose a domain
   class or method, never a module-level business function. (Rules 5, 6, 7)
 - Patch must follow the design's 11-section template (sec 8) and live at
-  `architecture/patches/YYYY-MM-DD-<feature>.md` with an approval checkbox.
+  `.architecture/patches/YYYY-MM-DD-<feature>.md` with an approval checkbox.
 - Agents are self-contained custom subagents in `.claude/agents/<name>.md`. (roadmap)
 - Never use em-dash in authored content (user global rule).
 
@@ -54,7 +54,7 @@ linter is the coherent choice. This locks the real `src/` module map that
 
 - Create `.claude/agents/architect.md`: the Architect custom subagent (frontmatter + full
   prompt body, self-contained).
-- Create (by the Architect, at execution) `architecture/patches/2026-06-25-boundaries-linter.md`:
+- Create (by the Architect, at execution) `.architecture/patches/2026-06-25-boundaries-linter.md`:
   the reconciliation + patch artifact.
 - No `src/` code is created this iteration (that is iteration 3).
 
@@ -77,14 +77,14 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 ```
 
 - [ ] **Step 2: Write the prompt body** (inline, self-contained). It must instruct the Architect to:
-  - read the intended docs first: `architecture/architecture.md`, `architecture/boundaries.yaml`,
-    `architecture/domain-model.md`, `architecture/data-contracts.md`, and (for the lint target)
+  - read the intended docs first: `.architecture/.architecture.md`, `.architecture/boundaries.yaml`,
+    `.architecture/domain-model.md`, `.architecture/data-contracts.md`, and (for the lint target)
     `sample/boundaries.yaml`;
   - make **exactly 1** `codegraph_explore` query about the affected area (here: the `sample/`
     structure and any place linter code would attach), then stop querying;
   - reconcile observed vs intended and pick one label: ALIGNED, DOC_DRIFT_ACCEPTED,
     CODE_DRIFT_HARMFUL, or UNCLEAR_DRIFT, with a justification tied to the comparison;
-  - write the patch to `architecture/patches/YYYY-MM-DD-<feature>.md` using the design's
+  - write the patch to `.architecture/patches/YYYY-MM-DD-<feature>.md` using the design's
     11-section template (sec 8): feature request, observed architecture, intended architecture,
     reconciliation decision, module changes, dependency changes (allowed + forbidden), domain
     model changes, data contract changes, files allowed to edit, tests required, risks, and an
@@ -115,10 +115,10 @@ dispatch a `general-purpose` subagent with the Task 1 prompt body inline. Same b
 
 ### Task 3: Verify the patch and judge
 
-- [ ] **Step 1: Patch exists.** Run: `ls architecture/patches/`. Expected: one
+- [ ] **Step 1: Patch exists.** Run: `ls .architecture/patches/`. Expected: one
   `2026-06-25-boundaries-linter.md` (or similar dated name), non-empty.
 - [ ] **Step 2: All 11 sections present.** Run:
-  `grep -ciE "feature request|observed|intended|reconciliation|module|dependency|domain|contract|files allowed|tests required|risk|approv" architecture/patches/*.md`.
+  `grep -ciE "feature request|observed|intended|reconciliation|module|dependency|domain|contract|files allowed|tests required|risk|approv" .architecture/patches/*.md`.
   Expected: every section heading from the sec 8 template is present.
 - [ ] **Step 3: Budget.** Confirm the Architect used exactly 1 CodeGraph query (from Task 2 Step 2).
   Expected: 1.
@@ -134,7 +134,7 @@ dispatch a `general-purpose` subagent with the Task 1 prompt body inline. Same b
 
 ### Task 4: Commit the patch and record outcome
 
-- [ ] **Step 1: Commit.** `git add architecture/patches && git commit -m "docs: architect patch for boundaries-linter"`
+- [ ] **Step 1: Commit.** `git add .architecture/patches && git commit -m "docs: architect patch for boundaries-linter"`
 - [ ] **Step 2:** If you approve the patch, tick its approval checkbox in a follow-up edit (this
   is the human gate that authorizes iteration 3 to build it).
 
@@ -143,7 +143,7 @@ dispatch a `general-purpose` subagent with the Task 1 prompt body inline. Same b
 ## Verification (end-to-end)
 
 1. `.claude/agents/architect.md` exists; dispatch (by name after reload, or inline fallback) succeeds.
-2. `architecture/patches/2026-06-25-boundaries-linter.md` exists with all 11 sections, 1 query, a
+2. `.architecture/patches/2026-06-25-boundaries-linter.md` exists with all 11 sections, 1 query, a
    justified drift label, and a bounded allowed-files list.
 3. No `src/` implementation code was created this iteration; `git status` shows only the agent def
    and the patch.
@@ -155,12 +155,12 @@ dispatch a `general-purpose` subagent with the Task 1 prompt body inline. Same b
 - Did the drift classification match your judgment on the planted sample violation?
 - Which of the 11 sections are essential vs noise for a feature this size (may justify a "small
   change" lite patch later)?
-- Did the proposed `src/` module map feel right, or should `architecture/boundaries.yaml` be
+- Did the proposed `src/` module map feel right, or should `.architecture/boundaries.yaml` be
   refined now that the real stack is Python?
 
 ## Open decisions
 
-- **Stack locked: Python.** Records the real `src/` layout; update `architecture/boundaries.yaml`
+- **Stack locked: Python.** Records the real `src/` layout; update `.architecture/boundaries.yaml`
   from placeholder to the Python module map when iteration 3 lands the code.
 - **OPEN (carried):** human approval is recorded by ticking the patch checkbox in-file for MVP.
   Revisit when iteration 5 wires the full loop.

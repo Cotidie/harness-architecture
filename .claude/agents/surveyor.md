@@ -55,7 +55,7 @@ alone, clearly labeled as intended-only.
 
 ## Outputs (write all seven)
 
-Write to `architecture/` (create the directory and `architecture/diagrams/`):
+Write to `.architecture/` (create the directory and `.architecture/diagrams/`):
 
 1. `architecture.md` : intended module map, key boundaries, accepted tradeoffs, known risks.
 2. `boundaries.yaml` : intended allowed/forbidden dependencies, one block per module, using the

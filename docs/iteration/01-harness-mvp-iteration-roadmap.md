@@ -64,20 +64,20 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **Goal:** Prove a subagent + CodeGraph can produce *compact, useful* intended-architecture
   docs for this repo within budget — without dumping the whole repo. This gates every later
   slice (reconciliation needs intended docs to compare against).
-- **User-facing value:** You run one subagent and get a populated `/architecture` folder that
+- **User-facing value:** You run one subagent and get a populated `/.architecture` folder that
   describes this repo's module map, allowed/forbidden dependencies, domain classes, and
   contracts compactly enough to read in one sitting.
 - **Features introduced:**
   - `.claude/agents/surveyor.md` (Surveyor as a first-class, self-contained custom subagent).
   - Surveyor dispatch by name: `Agent(subagent_type: 'surveyor')`, with
     `codegraph_explore` available; budget = 1–2 targeted queries.
-  - `/architecture/` artifacts seeded from real CodeGraph output.
+  - `/.architecture/` artifacts seeded from real CodeGraph output.
 - **Deliverables:**
   - `.claude/agents/surveyor.md`
-  - `architecture/architecture.md`, `architecture/boundaries.yaml`,
-    `architecture/domain-model.md`, `architecture/data-contracts.md`,
-    `architecture/graph-notes.md`, `architecture/diagrams/current.mmd`
-  - `architecture/state.yaml` initialized (`last_codegraph_query_scope`, commit sha).
+  - `.architecture/.architecture.md`, `.architecture/boundaries.yaml`,
+    `.architecture/domain-model.md`, `.architecture/data-contracts.md`,
+    `.architecture/graph-notes.md`, `.architecture/diagrams/current.mmd`
+  - `.architecture/state.yaml` initialized (`last_codegraph_query_scope`, commit sha).
 - **Testable conditions:**
   - All six artifacts exist and are non-empty.
   - `boundaries.yaml` names this repo's actual modules (not the design's generic
@@ -114,13 +114,13 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **Features introduced:**
   - `.claude/agents/architect.md` (Architect agent def) implementing the design's
     11-section patch + the reconciliation gate.
-  - Patch artifacts written to `architecture/patches/YYYY-MM-DD-<feature>.md` using the
+  - Patch artifacts written to `.architecture/patches/YYYY-MM-DD-<feature>.md` using the
     design's §8 template, including the approval checkbox.
   - The "Relevant Architecture Context" compact summary format (design §3) as the agent's
     output context, not raw CodeGraph dumps.
 - **Deliverables:**
   - `.claude/agents/architect.md`
-  - At least one real patch, e.g. `architecture/patches/2026-06-25-boundaries-linter.md`,
+  - At least one real patch, e.g. `.architecture/patches/2026-06-25-boundaries-linter.md`,
     produced from a genuine feature request against this repo.
 - **Testable conditions:**
   - Patch contains all 11 design sections (observed, intended, reconciliation decision,
@@ -224,12 +224,12 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   `harness-init`, and their repo has the four agents wired and intended-architecture docs
   bootstrapped, ready for the feature loop.
 - **Packaging decision (locked): Claude Code plugin.** The system is entirely Claude Code
-  artifacts (self-contained agent defs + a setup skill + the `/architecture` scaffold), so it
+  artifacts (self-contained agent defs + a setup skill + the `/.architecture` scaffold), so it
   ships as a plugin in a marketplace rather than a binary or template repo.
 - **Likely shape (re-planned from what iters 1–5 prove must ship):**
   - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector) + a
     `harness-init` setup skill.
-  - `harness-init` scaffolds `/architecture` into the target repo, checks CodeGraph is present
+  - `harness-init` scaffolds `/.architecture` into the target repo, checks CodeGraph is present
     (hard prereq, installed separately), and runs `surveyor` once to seed intended docs +
     `state.yaml`.
   - Target install flow: `codegraph init` → `/plugin install` → `harness-init` →
