@@ -20,8 +20,13 @@ so dependency structure, domain model, and data contracts evolve on purpose, nev
 **Confirmed sequencing decisions (from forks):**
 - **Invocation surface = Claude Code subagents, as first-class custom agent defs.** Each agent
   is a `.claude/agents/<name>.md` custom subagent (dispatched by name via the Agent tool) with
-  `codegraph_explore` available. The prompt body still lives with `/agent-prompts` content. No
-  slash-command UX in MVP.
+  `codegraph_explore` available. No slash-command UX in MVP.
+- **Single source per agent = `.claude/agents/<name>.md`.** The separate `/agent-prompts`
+  folder from the design is dropped: each agent def is self-contained (frontmatter + prompt
+  body in one file), so there is no duplicate prompt copy to drift. Tool portability is not an
+  MVP requirement, and iteration 7 ships a Claude Code plugin anyway.
+- **The four agents = Surveyor, Architect, Builder, Inspector** (was Snapshot, Patch, Scoped
+  Coding, Validation). Output nouns keep their names (the "patch" file, the validation report).
 - **Dogfood feature = a `boundaries.yaml` linter** — a tool that reads `boundaries.yaml` and
   reports any import violating a `must_not_depend_on` rule. Self-referential: it exercises the
   harness's own architecture rules. This is the feature driven through iterations 2–3.
@@ -63,13 +68,12 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   describes this repo's module map, allowed/forbidden dependencies, domain classes, and
   contracts compactly enough to read in one sitting.
 - **Features introduced:**
-  - `.claude/agents/surveyor.md` (Surveyor as a first-class custom subagent),
-    body sourced from `agent-prompts/surveyor.md`.
-  - Snapshot dispatch by name: `Agent(subagent_type: 'surveyor')`, with
+  - `.claude/agents/surveyor.md` (Surveyor as a first-class, self-contained custom subagent).
+  - Surveyor dispatch by name: `Agent(subagent_type: 'surveyor')`, with
     `codegraph_explore` available; budget = 1–2 targeted queries.
   - `/architecture/` artifacts seeded from real CodeGraph output.
 - **Deliverables:**
-  - `.claude/agents/surveyor.md` + `agent-prompts/surveyor.md`
+  - `.claude/agents/surveyor.md`
   - `architecture/architecture.md`, `architecture/boundaries.yaml`,
     `architecture/domain-model.md`, `architecture/data-contracts.md`,
     `architecture/graph-notes.md`, `architecture/diagrams/current.mmd`
@@ -78,11 +82,11 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   - All six artifacts exist and are non-empty.
   - `boundaries.yaml` names this repo's actual modules (not the design's generic
     domain/contracts/adapters template copied verbatim).
-  - Snapshot run used ≤ 2 CodeGraph queries (check the subagent's reported calls).
+  - Survey run used ≤ 2 CodeGraph queries (check the subagent's reported calls).
   - No artifact contains pasted long source bodies or a full file-by-file index.
   - `current.mmd` is high-level (boundaries), not one node per symbol.
 - **User test flow:**
-  1. Dispatch the Surveyor with `surveyor.md` against this repo.
+  1. Dispatch the Surveyor (`Agent(subagent_type: 'surveyor')`) against this repo.
   2. Read the generated `architecture.md` + `boundaries.yaml`.
   3. Judge: do these match how *you* think the repo is intended to be structured? Are they
      compact? Did it avoid repo-wide reads?
@@ -108,14 +112,14 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   decision (ALIGNED / DOC_DRIFT_ACCEPTED / CODE_DRIFT_HARMFUL / UNCLEAR_DRIFT) and a compact,
   reviewable patch file scoping exactly what may change.
 - **Features introduced:**
-  - `/agent-prompts/architect.md` (Architect prompt) implementing the design's
+  - `.claude/agents/architect.md` (Architect agent def) implementing the design's
     11-section patch + the reconciliation gate.
   - Patch artifacts written to `architecture/patches/YYYY-MM-DD-<feature>.md` using the
     design's §8 template, including the approval checkbox.
   - The "Relevant Architecture Context" compact summary format (design §3) as the agent's
     output context, not raw CodeGraph dumps.
 - **Deliverables:**
-  - `agent-prompts/architect.md`
+  - `.claude/agents/architect.md`
   - At least one real patch, e.g. `architecture/patches/2026-06-25-boundaries-linter.md`,
     produced from a genuine feature request against this repo.
 - **Testable conditions:**
@@ -153,14 +157,14 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **User-facing value:** You approve a patch and get a working code change that stays inside
   the patch's declared scope, with a summary of exactly what it touched.
 - **Features introduced:**
-  - `/agent-prompts/builder.md` (Builder prompt) with the design's hard
+  - `.claude/agents/builder.md` (Builder agent def) with the design's hard
     rules: edit only approved files, no raw dict/list across boundaries, no duplicate
     contracts, no module-level business functions, no CodeGraph call unless patch is ambiguous.
   - Coding-agent output summary (files changed, domain/contract changes, deps, tests,
     assumptions).
   - The "stop and request patch revision" path when the patch is insufficient.
 - **Deliverables:**
-  - `agent-prompts/builder.md`
+  - `.claude/agents/builder.md`
   - The implemented feature from iteration 2's patch (code + tests) on this repo.
   - A coding summary block recorded with the patch.
 - **Testable conditions:**
@@ -220,14 +224,14 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   `harness-init`, and their repo has the four agents wired and intended-architecture docs
   bootstrapped, ready for the feature loop.
 - **Packaging decision (locked): Claude Code plugin.** The system is entirely Claude Code
-  artifacts (agent defs + prompts + a setup skill + the `/architecture` scaffold), so it ships
-  as a plugin in a marketplace rather than a binary or template repo.
+  artifacts (self-contained agent defs + a setup skill + the `/architecture` scaffold), so it
+  ships as a plugin in a marketplace rather than a binary or template repo.
 - **Likely shape (re-planned from what iters 1–5 prove must ship):**
-  - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector) + the
-    `/agent-prompts` bodies + a `harness-init` setup skill.
-  - `harness-init` scaffolds `/architecture` + `/agent-prompts` into the target repo, checks
-    CodeGraph is present (hard prereq, installed separately), and runs `surveyor`
-    once to seed intended docs + `state.yaml`.
+  - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector) + a
+    `harness-init` setup skill.
+  - `harness-init` scaffolds `/architecture` into the target repo, checks CodeGraph is present
+    (hard prereq, installed separately), and runs `surveyor` once to seed intended docs +
+    `state.yaml`.
   - Target install flow: `codegraph init` → `/plugin install` → `harness-init` →
     run surveyor once → feature loop ready.
 - **Open / depends-on:** which files actually need to ship (decided by iters 1–5), and whether
