@@ -59,8 +59,8 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 | 2 | Reconcile + patch | Hand it a real feature request → subagent does 1 targeted CodeGraph query, classifies drift, writes an approvable architecture patch. |
 | 3 | Scoped coding | Approve a patch → subagent implements *only* it, touching only allowed files, no hidden architecture changes. |
 | 4 | Validation gate (light) | After coding, subagent re-checks changed symbols vs the patch and emits ACCEPT / REJECT decision. |
-| 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the four agents with the approval gate; `state.yaml` and docs update on accept; code + artifacts commit together. |
-| 6 | Budget + cadence hardening (light) | Token-budget enforcement, survey-on-cadence, drift-trend triggers. |
+| 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the agents with a conditional Surveyor step-0, the approval gate, and partial-entry args; `state.yaml` + docs update on accept; code + artifacts commit together. |
+| 6 | Budget hardening (light) | Token-budget enforcement + forbidden-behavior guards (cadence triggers moved into iter5). |
 | 7 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
 ---
@@ -228,16 +228,41 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **Why now in scope (reversal):** iterations 1-2 showed the agents work but the loop has no
   trigger surface. A single orchestrator skill is the minimal fix; per-agent skills are
   intentionally NOT added (kept minimal).
-- **Likely shape:** a skill that reads `.architecture/` context, dispatches each agent subagent
-  in turn, surfaces the patch for approval, and stops on any agent's REJECT/NEEDS-REVISION.
+- **Likely shape:**
+  ```
+  /harness-feature "<request>"
+    step 0 (conditional): if docs are stale by rule -> Surveyor first, log the reason
+    step 1: Architect -> patch
+    step 2: human approval gate
+    step 3: Builder
+    step 4: Inspector (self-check)
+    on accept: update state.yaml + docs, commit code + artifacts together
+  ```
+- **Conditional Surveyor (step 0).** The Surveyor is not a fixed first step; the orchestrator
+  decides whether to re-survey by a **concrete, logged rule**, not model intuition:
+  - re-survey if commits since `state.yaml.last_reconciled_commit` exceed a threshold (design
+    §7 cadence, around 5 to 10), or if the Architect signals broad `UNCLEAR_DRIFT` beyond the
+    feature's area, or if `--resurvey` is passed;
+  - default is to **skip** (re-surveying every feature blows the token budget and contradicts §7);
+  - when it does run, announce it and record why in `state.yaml` (for example "re-surveyed: 12
+    commits since last"). A re-survey rewrites the whole intended docs, so treat it as a
+    reviewable doc change, not a silent refresh.
+- **Partial entry via args (not per-agent skills):** `--patch-only` (stop after the Architect),
+  `--from-patch <file>` (skip to Builder for an already-approved patch), `--inspect-only`,
+  `--resurvey` / `--no-survey`. This covers the non-linear cases with one skill.
+- **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 7.**
+  For self-host the agents are dispatched as named subagents; whether external users need typed
+  per-agent commands is a packaging-time UX call, gated on feedback. Not built in the MVP loop.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
-## Iteration 6 — Budget + cadence hardening *(light — re-planned from feedback)*
+## Iteration 6 — Budget hardening *(light — re-planned from feedback)*
 
-- **Goal:** Enforce the token budget (design §3), add survey-on-cadence and drift-trend
-  triggers, and tighten the forbidden-behavior guards.
-- **User-facing value:** The harness stays cheap and self-maintaining over many features
-  instead of degrading into repo-wide exploration.
+- **Goal:** Enforce the token budget (design §3) across the loop and tighten the
+  forbidden-behavior guards (no whole-repo dumps, no re-querying, no raw payloads).
+- **User-facing value:** The harness stays cheap over many features instead of degrading into
+  repo-wide exploration.
+- **Note:** survey-on-cadence and drift-trend re-survey triggers moved into iteration 5 (the
+  orchestrator's conditional step-0 staleness rule), so they are not separate work here.
 - Detail deferred. Sequenced before packaging because the loop must be proven cheap before
   it is worth shipping to others.
 
