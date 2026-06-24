@@ -25,7 +25,7 @@ Confirmed decisions that shape this plan:
 - **Agents are first-class custom subagents** (`.claude/agents/<name>.md`), dispatched by name.
 
 **Goal:** Stand up the `surveyor` custom subagent and prove it can turn real
-CodeGraph output into compact `/architecture` docs, while seeding the intended architecture
+CodeGraph output into compact `/.architecture` docs, while seeding the intended architecture
 docs from the design.
 
 **Architecture:** Add a small throwaway Python `src/` (domain, contract, application, adapter,
@@ -56,7 +56,7 @@ throwaway Python sample; `codegraph` CLI / `codegraph_explore` MCP tool.
   - `src/contracts/route_dto.py`
   - `src/application/plan_route.py`
   - `src/adapters/route_repository.py`
-- Create (kept) `/architecture/` artifacts: `architecture.md`, `boundaries.yaml`, `domain-model.md`,
+- Create (kept) `/.architecture/` artifacts: `architecture.md`, `boundaries.yaml`, `domain-model.md`,
   `data-contracts.md`, `graph-notes.md`, `diagrams/current.mmd`, `state.yaml`.
 
 ---
@@ -69,7 +69,7 @@ throwaway Python sample; `codegraph` CLI / `codegraph_explore` MCP tool.
 
 - [ ] **Step 1: Write the prompt body** `agent-prompts/surveyor.md`. Must instruct the agent to:
   - run at most 1 to 2 `codegraph_explore` queries to observe module/dependency/class/contract structure;
-  - emit the six `/architecture` artifacts (design sec 4) plus `state.yaml` (sec 9);
+  - emit the six `/.architecture` artifacts (design sec 4) plus `state.yaml` (sec 9);
   - fill `boundaries.yaml` to the sec 10 schema and `current.mmd` at boundary altitude only;
   - record observed-vs-intended drift in `graph-notes.md` where they differ;
   - obey the forbidden-behavior list (no whole-repo dump, no long source bodies, no em-dash).
@@ -118,10 +118,10 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 
 ### Task 5: Verify testable conditions + judge
 
-- [ ] **Step 1: Artifacts exist and non-empty.** Run: `for f in architecture.md boundaries.yaml domain-model.md data-contracts.md graph-notes.md diagrams/current.mmd state.yaml; do test -s "architecture/$f" && echo "OK $f" || echo "MISSING $f"; done`.
+- [ ] **Step 1: Artifacts exist and non-empty.** Run: `for f in architecture.md boundaries.yaml domain-model.md data-contracts.md graph-notes.md diagrams/current.mmd state.yaml; do test -s ".architecture/$f" && echo "OK $f" || echo "MISSING $f"; done`.
   Expected: all OK.
 - [ ] **Step 2: Budget.** Confirm agent used 2 or fewer CodeGraph queries (from Task 4 Step 2). Expected: <= 2.
-- [ ] **Step 3: No bloat.** Run: `grep -rn "def \|class " architecture/*.md | head` and eyeball `current.mmd`.
+- [ ] **Step 3: No bloat.** Run: `grep -rn "def \|class " .architecture/*.md | head` and eyeball `current.mmd`.
   Expected: no pasted source bodies; diagram is boundary-level, not per-symbol.
 - [ ] **Step 4: Accuracy.** `boundaries.yaml` names the sample's real modules (domain/contracts/application/adapters);
   `graph-notes.md` records the planted domain -> contracts forbidden edge as observed drift. Expected: both true.
@@ -146,7 +146,7 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 2. Re-dispatch the Surveyor on the (now code-less) repo: it should report "no source to observe"
    gracefully and keep the intended placeholder docs. Confirms the agent degrades cleanly, which is the
    real state until iteration 2 adds code.
-3. `ls architecture/` shows all seven artifacts; `git status` clean; no `src/` left.
+3. `ls .architecture/` shows all seven artifacts; `git status` clean; no `src/` left.
 
 ## Feedback to collect (feeds iteration 2 detailing)
 

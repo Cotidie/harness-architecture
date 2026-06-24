@@ -41,7 +41,7 @@ Use CodeGraph to answer:
 - Which domain classes and data contracts already exist?
 ```
 
-Do not treat `/architecture/*.md` as an exact mirror of the current codebase. They are design memory, not ground truth.
+Do not treat `/.architecture/*.md` as an exact mirror of the current codebase. They are design memory, not ground truth.
 
 Use CodeGraph only through targeted questions:
 
@@ -96,7 +96,7 @@ Because CodeGraph tracks the codebase, this is not mainly a â€œstale CodeGraphâ€
 ```text
 Observed architecture from CodeGraph
 vs.
-Intended architecture from /architecture docs
+Intended architecture from /.architecture docs
 ```
 
 Before planning a feature, the Architect must ask one targeted CodeGraph question about the affected area and compare it with the intended docs.
@@ -270,7 +270,7 @@ Known risks:
 Create these files:
 
 ```text
-/architecture
+/.architecture
   state.yaml               # last reconciliation/validation metadata; not source of truth
   architecture.md          # intended module map, key boundaries, risks
   boundaries.yaml          # intended allowed/forbidden dependencies
@@ -291,8 +291,8 @@ Create these files:
 Optional later:
 
 ```text
-/architecture/adr/
-/architecture/snapshots/
+/.architecture/adr/
+/.architecture/snapshots/
 ```
 
 Important:
@@ -340,7 +340,7 @@ Inputs:
 Required output:
 
 ```text
-/architecture/patches/YYYY-MM-DD-feature-name.md
+/.architecture/patches/YYYY-MM-DD-feature-name.md
 ```
 
 Patch must include:
@@ -646,7 +646,7 @@ Adjust module names to the actual repo.
 ```text
 1. Install/wire CodeGraph.
 2. Initialize the project once.
-3. Create /architecture and the .claude/agents defs (surveyor, architect, builder, inspector).
+3. Create /.architecture and the .claude/agents defs (surveyor, architect, builder, inspector).
 4. Run Surveyor once.
 5. Create architecture.md, boundaries.yaml, domain-model.md, data-contracts.md, and current.mmd.
 ```
