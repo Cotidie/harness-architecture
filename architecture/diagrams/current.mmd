@@ -1,0 +1,14 @@
+graph TD
+    adapters["adapters<br/>(src/adapters)"]
+    application["application<br/>(src/application)"]
+    domain["domain<br/>(src/domain)"]
+    contracts["contracts<br/>(src/contracts)"]
+    shared["shared<br/>(reserved, not on disk)"]
+
+    adapters --> application
+    adapters --> domain
+    application --> domain
+    application --> contracts
+    domain -->|FORBIDDEN| contracts
+
+    linkStyle 4 stroke:#d00,stroke-width:2px
