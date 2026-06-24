@@ -281,10 +281,11 @@ Create these files:
   patches/                 # approved architecture patches
   validation/latest-report.md
 
-/agent-prompts
+.claude/agents          # self-contained custom subagent defs (frontmatter + prompt body)
+  surveyor.md
   architect.md
   builder.md
-  architecture-validation.md
+  inspector.md
 ```
 
 Optional later:
@@ -487,7 +488,7 @@ graph-notes.md
 diagrams/current.mmd
 ```
 
-Snapshot rule:
+Survey rule:
 
 ```text
 Do not summarize the whole repo.
@@ -645,7 +646,7 @@ Adjust module names to the actual repo.
 ```text
 1. Install/wire CodeGraph.
 2. Initialize the project once.
-3. Create /architecture and /agent-prompts.
+3. Create /architecture and the .claude/agents defs (surveyor, architect, builder, inspector).
 4. Run Surveyor once.
 5. Create architecture.md, boundaries.yaml, domain-model.md, data-contracts.md, and current.mmd.
 ```
