@@ -138,6 +138,13 @@ Allowed edges introduced (all conform to `.architecture/boundaries.yaml`):
   `src/domain/boundaries`, `src/contracts/boundaries` (allowed: adapters may
   depend on application, domain, contracts).
 
+External dependency (amendment, iteration-3 decision):
+
+- The linter takes one external dependency, **PyYAML**, to parse `boundaries.yaml`. It is
+  imported ONLY in `src/adapters/boundaries/boundaries_config_loader.py`. External deps belong
+  in the adapters layer, so this conforms to the intended boundaries. Tests use stdlib
+  `unittest` (no test-framework dependency).
+
 Forbidden edges to actively avoid while building:
 
 - `src/domain/boundaries -> src/contracts/boundaries` (forbidden; the domain
@@ -204,6 +211,7 @@ the application layer maps between contracts and domain inputs.
 - `src/adapters/boundaries/violation_reporter.py` (create)
 - `src/adapters/boundaries/cli.py` (create)
 - Test files under `tests/` per section 10 (create)
+- `requirements.txt` (create): pins PyYAML (amendment, iteration-3 dependency decision)
 
 Out of scope (must NOT edit): everything under `sample/` (the fixture, including
 the planted violation), and the `.architecture/` docs except this patch.
@@ -250,3 +258,6 @@ Boundary / integration:
   not reported, to avoid false positives.
 
 - [x] Approved (user, 2026-06-25). Authorizes iteration 3 (Builder) to implement this patch.
+
+Amendment (2026-06-25, iteration 3): added the PyYAML external dependency (adapters loader
+only) and `requirements.txt` to the allowed files. Tests use stdlib unittest. Approval stands.
