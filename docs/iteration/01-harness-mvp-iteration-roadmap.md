@@ -281,6 +281,36 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 - **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 9.**
   For self-host the agents are dispatched as named subagents; whether external users need typed
   per-agent commands is a packaging-time UX call, gated on feedback. Not built in the MVP loop.
+
+- **Trust + governance requirements (from iter-4 user-test, 2026-06-25).** Iteration 4 proved
+  the agents work but exposed that the *controls* are honor-system. The orchestrator is where
+  they get teeth. These are requirements for this iteration, not optional polish:
+  - **Approval must be unforgeable by the agent.** Today "approval" is an agent editing
+    `- [ ] Approved` to `- [x]` in the patch; in iter 4 the agent ticked its own patch. For a
+    "no silent architecture change" system that is the load-bearing control with no teeth. The
+    orchestrator must take approval from an action the agent cannot perform: a hard pause for
+    real human input, a human-signed git trailer, or a separate approval token the agent cannot
+    write. The agent must never be able to self-approve a patch.
+  - **The orchestrator runs the mechanical gates itself; it does not trust the agent's
+    self-report.** Gate 1 (run tests, run the linter self-check, diff-vs-allowed-files scope) is
+    deterministic and must be executed by the orchestrator, not reported by the Inspector. Only
+    the *judgment* part (gate-2 reconciliation, drift labeling) is delegated to the Inspector
+    agent. This is the "who verifies the Inspector" gap: a deterministic check should not depend
+    on an LLM saying it ran.
+  - **REJECT / NEEDS PATCH REVISION must define what happens next.** The Inspector report must be
+    machine-actionable (which agent to re-invoke, what to change), and the orchestrator caps the
+    revise loop with a **max-iteration** count so it cannot ping-pong or dead-end. Spell out the
+    REJECT -> Architect re-scope -> re-approve -> Builder -> Inspector cycle and its exit.
+  - **CodeGraph freshness gate before any agent query.** Each agent gets one query; the
+    orchestrator must run `codegraph sync` and confirm the index reflects the latest writes
+    before dispatching, so reconciliation does not read stale dependency edges (verbatim source
+    is current, but edges lag ~1s).
+  - **Grounded Architect signatures (gate-2 baseline).** Gate 2 only trusts the patch's declared
+    seam signatures. The Architect must derive those from CodeGraph (current signatures) and diff
+    against its proposal, so the declared seams are grounded, not invented. A wrong declared
+    signature otherwise becomes a wrong gate-2 baseline (false ACCEPT). Mechanical/AST-based
+    gate-2 extraction is deferred to iteration 8; grounding the Architect's declaration is the
+    iter-5 half.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
 ## Iteration 6 — Budget hardening *(light — re-planned from feedback)*
@@ -291,6 +321,15 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
   repo-wide exploration.
 - **Note:** survey-on-cadence and drift-trend re-survey triggers moved into iteration 5 (the
   orchestrator's conditional step-0 staleness rule), so they are not separate work here.
+- **Budget is metered, not self-reported (from iter-4 user-test).** Today each agent reports its
+  own query count and the human verifies by hand. Enforcement must measure actual tool calls
+  (the orchestrator or a hook counts `codegraph_explore` invocations) and fail/flag when an agent
+  exceeds its budget, rather than trusting the agent's summary line.
+- **Periodic full-graph drift scan (from iter-4 user-test).** The Architect classifies drift only
+  for the feature's area (correct for focus), so harmful drift *outside* every feature's area
+  accumulates invisibly until a Surveyor re-survey. Add a cheap, feature-independent full-graph
+  drift check (run on the iter-5 cadence trigger) so accumulating off-path drift is surfaced, not
+  silently carried.
 - Detail deferred. Sequenced before packaging because the loop must be proven cheap before
   it is worth shipping to others.
 
@@ -347,9 +386,14 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
     adapter over CodeGraph rather than over `ast`. Polyglot "for free", couples to CodeGraph.
   - **B) Multi-language scanner** — add per-language parsers behind the existing
     `ScanResult` contract. More work, no CodeGraph coupling at check time.
+- **Deterministic gate-2 (from iter-4 user-test).** Iter-4 gate 2 (seam-signature conformance)
+  is LLM-judged: the Inspector reads source and compares to the patch by judgment, so it is the
+  one non-deterministic gate. Whichever signature-extraction this iteration builds per language
+  (AST or CodeGraph) should also back a **mechanical** gate-2, so signature conformance becomes a
+  deterministic check like gate 1 rather than a model opinion. Same extractor serves both.
 - **Testable conditions (sketch):** the linter on a TS or Java sample with a planted forbidden
   edge reports it with correct file + line and exits non-zero, same contract shape as the
-  Python path.
+  Python path; a planted signature mismatch is caught mechanically.
 - **Risks / open decisions:** the A-vs-B fork (CodeGraph-edge vs own parsers) is shape-changing
   — surface it to the user when detailing. Relative/aliased imports per language are an edge
   set to enumerate then.
@@ -372,6 +416,11 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
     `state.yaml`.
   - Target install flow: `codegraph init` → `/plugin install` → **reload so the agents register
     by name** → `harness-init` → run surveyor once → feature loop ready.
+  - **Reload is a verified gate, not a hint (from iter-4 user-test).** A newly installed agent is
+    not dispatchable by name until `/reload-plugins`; before that the loop falls back to inline
+    general-purpose dispatch. `harness-init` must verify the four agents resolve by name (and
+    block / instruct the reload if not) so a fresh install's first loop does not silently run on
+    the fallback path.
 - **Open / depends-on:** which files actually need to ship (decided by iters 1–8, including the
   convention profile and any polyglot scanner), and whether CodeGraph install can be
   checked/guided by the setup skill or stays fully manual.
