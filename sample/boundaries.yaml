@@ -1,0 +1,33 @@
+# Intended boundaries for the SAMPLE fixture only.
+# This is the dogfood target the harness agents run against across iterations.
+# It is separate from architecture/boundaries.yaml (which describes the real repo).
+modules:
+  domain:
+    path: "sample/domain/**"
+    responsibility: "Core business concepts, invariants, and behavior"
+    may_depend_on: [shared]
+    must_not_depend_on: [application, adapters, contracts]
+
+  contracts:
+    path: "sample/contracts/**"
+    responsibility: "Stable data shapes crossing boundaries"
+    may_depend_on: [shared]
+    must_not_depend_on: [application, domain, adapters]
+
+  application:
+    path: "sample/application/**"
+    responsibility: "Use cases and orchestration"
+    may_depend_on: [domain, contracts, shared]
+    must_not_depend_on: [adapters]
+
+  adapters:
+    path: "sample/adapters/**"
+    responsibility: "External systems, DB, APIs, framework, tools"
+    may_depend_on: [application, domain, contracts, shared]
+    must_not_depend_on: []
+
+  shared:
+    path: "sample/shared/**"
+    responsibility: "Small primitives and utilities"
+    may_depend_on: []
+    must_not_depend_on: [application, domain, contracts, adapters]
