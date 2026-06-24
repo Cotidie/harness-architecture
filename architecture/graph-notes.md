@@ -3,7 +3,7 @@
 > Historical record of the iteration 1 snapshot exercise. It was run against a
 > throwaway sample `src/` (route risk planning) created only to prove the
 > CodeGraph to docs path works. That sample has since been removed, so the
-> symbols below no longer exist on disk. The key result: the snapshot agent
+> symbols below no longer exist on disk. The key result: the Surveyor
 > correctly detected the deliberately planted forbidden `domain -> contracts`
 > edge in 1 query. Observed architecture is empty until iteration 2 adds real code.
 

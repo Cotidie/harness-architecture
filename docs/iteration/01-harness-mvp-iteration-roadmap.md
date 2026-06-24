@@ -44,17 +44,17 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 
 | # | Iteration | User-facing slice |
 |---|-----------|-------------------|
-| 1 | Snapshot bootstrap | Run one subagent → get compact intended-architecture docs (`architecture.md`, `boundaries.yaml`, `domain-model.md`, `data-contracts.md`, `current.mmd`) generated from this repo via CodeGraph. |
+| 1 | Surveyor bootstrap | Run one subagent → get compact intended-architecture docs (`architecture.md`, `boundaries.yaml`, `domain-model.md`, `data-contracts.md`, `current.mmd`) generated from this repo via CodeGraph. |
 | 2 | Reconcile + patch | Hand it a real feature request → subagent does 1 targeted CodeGraph query, classifies drift, writes an approvable architecture patch. |
 | 3 | Scoped coding | Approve a patch → subagent implements *only* it, touching only allowed files, no hidden architecture changes. |
 | 4 | Validation gate (light) | After coding, subagent re-checks changed symbols vs the patch and emits ACCEPT / REJECT decision. |
 | 5 | Full loop + state (light) | The four agents run as one wired sequence; `state.yaml` and docs update on accept; code + artifacts commit together. |
-| 6 | Budget + cadence hardening (light) | Token-budget enforcement, snapshot-on-cadence, drift-trend triggers. |
-| 7 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + snapshot to bootstrap. |
+| 6 | Budget + cadence hardening (light) | Token-budget enforcement, survey-on-cadence, drift-trend triggers. |
+| 7 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
 ---
 
-## Iteration 1 — Snapshot bootstrap
+## Iteration 1 — Surveyor bootstrap
 
 - **Goal:** Prove a subagent + CodeGraph can produce *compact, useful* intended-architecture
   docs for this repo within budget — without dumping the whole repo. This gates every later
@@ -63,13 +63,13 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   describes this repo's module map, allowed/forbidden dependencies, domain classes, and
   contracts compactly enough to read in one sitting.
 - **Features introduced:**
-  - `.claude/agents/architecture-snapshot.md` (Snapshot Agent as a first-class custom subagent),
-    body sourced from `agent-prompts/architecture-snapshot.md`.
-  - Snapshot dispatch by name: `Agent(subagent_type: 'architecture-snapshot')`, with
+  - `.claude/agents/surveyor.md` (Surveyor as a first-class custom subagent),
+    body sourced from `agent-prompts/surveyor.md`.
+  - Snapshot dispatch by name: `Agent(subagent_type: 'surveyor')`, with
     `codegraph_explore` available; budget = 1–2 targeted queries.
   - `/architecture/` artifacts seeded from real CodeGraph output.
 - **Deliverables:**
-  - `.claude/agents/architecture-snapshot.md` + `agent-prompts/architecture-snapshot.md`
+  - `.claude/agents/surveyor.md` + `agent-prompts/surveyor.md`
   - `architecture/architecture.md`, `architecture/boundaries.yaml`,
     `architecture/domain-model.md`, `architecture/data-contracts.md`,
     `architecture/graph-notes.md`, `architecture/diagrams/current.mmd`
@@ -82,7 +82,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   - No artifact contains pasted long source bodies or a full file-by-file index.
   - `current.mmd` is high-level (boundaries), not one node per symbol.
 - **User test flow:**
-  1. Dispatch the snapshot subagent with `architecture-snapshot.md` against this repo.
+  1. Dispatch the Surveyor with `surveyor.md` against this repo.
   2. Read the generated `architecture.md` + `boundaries.yaml`.
   3. Judge: do these match how *you* think the repo is intended to be structured? Are they
      compact? Did it avoid repo-wide reads?
@@ -94,7 +94,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
     need to change? (This directly shapes iteration 2's reconciliation.)
 - **Risks / open decisions:**
   - Packaging decided: first-class `.claude/agents/*.md` custom subagents (dispatch by name).
-  - **OPEN:** does the snapshot agent definition's tool allowlist need `codegraph_explore`
+  - **OPEN:** does the Surveyor definition's tool allowlist need `codegraph_explore`
     explicitly granted, vs inherited? Resolve on first dispatch.
 
 ---
@@ -108,14 +108,14 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   decision (ALIGNED / DOC_DRIFT_ACCEPTED / CODE_DRIFT_HARMFUL / UNCLEAR_DRIFT) and a compact,
   reviewable patch file scoping exactly what may change.
 - **Features introduced:**
-  - `/agent-prompts/architecture-patch.md` (Patch Agent prompt) implementing the design's
+  - `/agent-prompts/architect.md` (Architect prompt) implementing the design's
     11-section patch + the reconciliation gate.
   - Patch artifacts written to `architecture/patches/YYYY-MM-DD-<feature>.md` using the
     design's §8 template, including the approval checkbox.
   - The "Relevant Architecture Context" compact summary format (design §3) as the agent's
     output context, not raw CodeGraph dumps.
 - **Deliverables:**
-  - `agent-prompts/architecture-patch.md`
+  - `agent-prompts/architect.md`
   - At least one real patch, e.g. `architecture/patches/2026-06-25-boundaries-linter.md`,
     produced from a genuine feature request against this repo.
 - **Testable conditions:**
@@ -153,14 +153,14 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **User-facing value:** You approve a patch and get a working code change that stays inside
   the patch's declared scope, with a summary of exactly what it touched.
 - **Features introduced:**
-  - `/agent-prompts/scoped-coding.md` (Scoped Coding Agent prompt) with the design's hard
+  - `/agent-prompts/builder.md` (Builder prompt) with the design's hard
     rules: edit only approved files, no raw dict/list across boundaries, no duplicate
     contracts, no module-level business functions, no CodeGraph call unless patch is ambiguous.
   - Coding-agent output summary (files changed, domain/contract changes, deps, tests,
     assumptions).
   - The "stop and request patch revision" path when the patch is insufficient.
 - **Deliverables:**
-  - `agent-prompts/scoped-coding.md`
+  - `agent-prompts/builder.md`
   - The implemented feature from iteration 2's patch (code + tests) on this repo.
   - A coding summary block recorded with the patch.
 - **Testable conditions:**
@@ -197,7 +197,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 
 ## Iteration 5 — Full loop + state *(light — re-planned from feedback)*
 
-- **Goal:** Run snapshot → patch → code → validate as one wired sequence, with `state.yaml`
+- **Goal:** Run survey → patch → code → validate as one wired sequence, with `state.yaml`
   and architecture docs updated on accept, and code + artifacts committed together.
 - **User-facing value:** One feature request flows end-to-end through the harness with the
   human approval gate, and architecture memory stays current automatically.
@@ -205,7 +205,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 
 ## Iteration 6 — Budget + cadence hardening *(light — re-planned from feedback)*
 
-- **Goal:** Enforce the token budget (design §3), add snapshot-on-cadence and drift-trend
+- **Goal:** Enforce the token budget (design §3), add survey-on-cadence and drift-trend
   triggers, and tighten the forbidden-behavior guards.
 - **User-facing value:** The harness stays cheap and self-maintaining over many features
   instead of degrading into repo-wide exploration.
@@ -223,13 +223,13 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   artifacts (agent defs + prompts + a setup skill + the `/architecture` scaffold), so it ships
   as a plugin in a marketplace rather than a binary or template repo.
 - **Likely shape (re-planned from what iters 1–5 prove must ship):**
-  - Plugin bundles `.claude/agents/*` (snapshot, patch, scoped-coding, validation) + the
+  - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector) + the
     `/agent-prompts` bodies + a `harness-init` setup skill.
   - `harness-init` scaffolds `/architecture` + `/agent-prompts` into the target repo, checks
-    CodeGraph is present (hard prereq, installed separately), and runs `architecture-snapshot`
+    CodeGraph is present (hard prereq, installed separately), and runs `surveyor`
     once to seed intended docs + `state.yaml`.
   - Target install flow: `codegraph init` → `/plugin install` → `harness-init` →
-    snapshot once → feature loop ready.
+    run surveyor once → feature loop ready.
 - **Open / depends-on:** which files actually need to ship (decided by iters 1–5), and whether
   CodeGraph install can be checked/guided by the setup skill or stays fully manual.
 - Detail deferred. Sequenced last: packaging is only worth doing once the loop is proven cheap
