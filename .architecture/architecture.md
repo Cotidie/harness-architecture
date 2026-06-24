@@ -4,9 +4,9 @@ This document captures the INTENDED architecture (design memory). CodeGraph is
 the source of truth for what the code currently contains. See `graph-notes.md`
 for snapshot observations and any observed-vs-intended drift.
 
-Status: this repository has no settled source code yet. The module map below is
-the design's generic placeholder layout. The real stack and module names are
-locked in iteration 2 when the boundaries-linter is built.
+Status: the stack is Python and the first real code has landed (the boundaries
+linter under `src/`, iteration 3). The module map below is now the real intended
+layout, not a placeholder.
 
 ## Intended module map
 
@@ -47,7 +47,7 @@ adapters    -> application, domain, contracts, shared
 
 ## Known risks
 
-- Placeholder layout may not match the real stack chosen in iteration 2; expect
-  this map to be refined then.
-- No source code or tests exist yet, so boundary enforcement is unproven until
-  the first real module lands.
+- Import resolution in the linter handles module-level absolute imports only;
+  relative and function-local imports are skipped (documented limitation).
+- The intended boundaries are now enforced by the linter's own self-check
+  (`src/` against this `boundaries.yaml`), which passes with zero violations.
