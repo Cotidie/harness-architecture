@@ -18,9 +18,15 @@ re-slice it directly rather than re-deciding anything.
 so dependency structure, domain model, and data contracts evolve on purpose, never silently.
 
 **Confirmed sequencing decisions (from forks):**
-- **Invocation surface = Claude Code subagents, as first-class custom agent defs.** Each agent
-  is a `.claude/agents/<name>.md` custom subagent (dispatched by name via the Agent tool) with
-  `codegraph_explore` available. No slash-command UX in MVP.
+- **Invocation surface = Claude Code subagents + one orchestrator skill.** Each agent is a
+  `.claude/agents/<name>.md` custom subagent (dispatched by name, with `codegraph_explore`).
+  **Revised (iter 1-2 feedback):** the original "no slash-command UX" decision is reversed in
+  part. The loop has no user-facing trigger when the main agent hand-dispatches each subagent,
+  so iteration 5 adds a single orchestrator skill `/harness-feature "<request>"` that chains
+  survey -> architect -> [approve] -> builder -> inspector. No per-agent skills (kept minimal).
+- **Newly added agents are not dispatchable by name until `/reload-plugins`.** During the
+  session that creates an agent def, dispatch its prompt inline via a generic subagent; the
+  named type works after a reload. The iteration 7 install flow includes this reload step.
 - **Single source per agent = `.claude/agents/<name>.md`.** The separate `/agent-prompts`
   folder from the design is dropped: each agent def is self-contained (frontmatter + prompt
   body in one file), so there is no duplicate prompt copy to drift. Tool portability is not an
@@ -53,7 +59,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 | 2 | Reconcile + patch | Hand it a real feature request → subagent does 1 targeted CodeGraph query, classifies drift, writes an approvable architecture patch. |
 | 3 | Scoped coding | Approve a patch → subagent implements *only* it, touching only allowed files, no hidden architecture changes. |
 | 4 | Validation gate (light) | After coding, subagent re-checks changed symbols vs the patch and emits ACCEPT / REJECT decision. |
-| 5 | Full loop + state (light) | The four agents run as one wired sequence; `state.yaml` and docs update on accept; code + artifacts commit together. |
+| 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the four agents with the approval gate; `state.yaml` and docs update on accept; code + artifacts commit together. |
 | 6 | Budget + cadence hardening (light) | Token-budget enforcement, survey-on-cadence, drift-trend triggers. |
 | 7 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
@@ -144,9 +150,16 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   - Was one query enough to reconcile, or did it guess? (Tightens iteration-3 trust.)
   - Template friction: which of the 11 sections are noise for small changes vs essential?
     (May justify a "small change" lite patch later.)
+- **Applied (iter 1-2 feedback), now baked into `architect.md`:**
+  - **Drift-scoping rule:** the Architect classifies drift *for the feature's affected area
+    only*, and notes unrelated observed drift separately without letting it change the
+    feature's label. (Observed working in iter 2; codified so it stays.)
+  - **Lite-patch path:** for small changes the Architect may collapse the 11-section template
+    (skip empty Module/Contract/Domain sections) while always keeping reconciliation decision,
+    files-allowed, tests-required, and the approval checkbox.
 - **Risks / open decisions:**
   - **OPEN:** how human approval is recorded (checkbox edit in-file vs a separate gate). MVP =
-    you edit the checkbox. Revisit when iteration 5 wires the full loop.
+    you edit the checkbox. Revisit when iteration 5 adds the orchestrator skill.
 
 ---
 
@@ -195,17 +208,29 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **User-facing value:** You get an ACCEPT / NEEDS REVISION / REJECT decision (with reason)
   on a change before you trust it — catching forbidden edges, new cycles, raw boundary
   payloads, or out-of-patch interface drift.
-- Detail deferred. Will fold in iteration 3's findings on whether prompt-only scope discipline
-  held or needs mechanical guards, and which checks (design §6 Agent 3) actually catch real
-  problems on this repo.
+- **Mechanical gate (decided from iter 2):** the Inspector reuses the Builder's self-check, run
+  the boundaries-linter on `src/` against `.architecture/boundaries.yaml` and require zero
+  violations. The iteration-2 patch already invented this check; promote it to the standing
+  validation gate so "no forbidden edge" is verified by tooling, not just by reading the diff.
+- **Prompt caveat (from iter 1-2):** the Inspector (and Surveyor) must treat CodeGraph's
+  `tests:` field as *callers*, not test coverage; do not report coverage from it.
+- Detail otherwise deferred. Will fold in iteration 3's findings on whether prompt-only scope
+  discipline held or needs more mechanical guards.
 
-## Iteration 5 — Full loop + state *(light — re-planned from feedback)*
+## Iteration 5 — Orchestrator skill + state *(light — re-planned from feedback)*
 
-- **Goal:** Run survey → patch → code → validate as one wired sequence, with `state.yaml`
-  and architecture docs updated on accept, and code + artifacts committed together.
-- **User-facing value:** One feature request flows end-to-end through the harness with the
-  human approval gate, and architecture memory stays current automatically.
-- Detail deferred. Depends on how much hand-holding iterations 2–4 needed between steps.
+- **Goal:** Give the harness a single user-facing trigger. A `/harness-feature "<request>"`
+  skill chains survey -> architect -> [human approval] -> builder -> inspector, updating
+  `state.yaml` and docs on accept and committing code + artifacts together.
+- **User-facing value:** You run one command with a feature request and the harness drives the
+  whole loop, pausing only at the approval gate. The loop no longer depends on the main agent
+  hand-dispatching each subagent.
+- **Why now in scope (reversal):** iterations 1-2 showed the agents work but the loop has no
+  trigger surface. A single orchestrator skill is the minimal fix; per-agent skills are
+  intentionally NOT added (kept minimal).
+- **Likely shape:** a skill that reads `.architecture/` context, dispatches each agent subagent
+  in turn, surfaces the patch for approval, and stops on any agent's REJECT/NEEDS-REVISION.
+- Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
 ## Iteration 6 — Budget + cadence hardening *(light — re-planned from feedback)*
 
@@ -227,13 +252,13 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   artifacts (self-contained agent defs + a setup skill + the `/.architecture` scaffold), so it
   ships as a plugin in a marketplace rather than a binary or template repo.
 - **Likely shape (re-planned from what iters 1–5 prove must ship):**
-  - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector) + a
-    `harness-init` setup skill.
+  - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector), the
+    `/harness-feature` orchestrator skill (iter 5), and a `harness-init` setup skill.
   - `harness-init` scaffolds `/.architecture` into the target repo, checks CodeGraph is present
     (hard prereq, installed separately), and runs `surveyor` once to seed intended docs +
     `state.yaml`.
-  - Target install flow: `codegraph init` → `/plugin install` → `harness-init` →
-    run surveyor once → feature loop ready.
+  - Target install flow: `codegraph init` → `/plugin install` → **reload so the agents register
+    by name** → `harness-init` → run surveyor once → feature loop ready.
 - **Open / depends-on:** which files actually need to ship (decided by iters 1–5), and whether
   CodeGraph install can be checked/guided by the setup skill or stays fully manual.
 - Detail deferred. Sequenced last: packaging is only worth doing once the loop is proven cheap

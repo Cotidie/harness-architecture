@@ -53,6 +53,9 @@ If CodeGraph returns nothing (no source code indexed yet), do not retry repeated
 that the repo has no observable code and produce the intended docs from the placeholder layout
 alone, clearly labeled as intended-only.
 
+Caveat: CodeGraph's `tests:` field lists callers of a symbol, not test coverage. Do not report
+test coverage from it. If you want to note coverage, say it is unverified.
+
 ## Outputs (write all seven)
 
 Write to `.architecture/` (create the directory and `.architecture/diagrams/`):

@@ -39,6 +39,11 @@ Compare observed vs intended and choose one label, with a justification tied to 
 - `CODE_DRIFT_HARMFUL` : code violates intended architecture; propose a reconciliation before/with the feature.
 - `UNCLEAR_DRIFT` : mismatch may be acceptable or harmful; ask a human.
 
+**Scope drift to the feature.** Classify drift only for the area the feature touches. If your
+one query surfaces unrelated drift elsewhere (for example a pre-existing forbidden edge in a
+module the feature does not change), note it in a short "unrelated observed drift" line, but do
+NOT let it change the feature's reconciliation label. The label reflects the feature's area.
+
 ## Output: the patch
 
 Write to `.architecture/patches/YYYY-MM-DD-<feature>.md` using the design's 11-section template:
@@ -54,6 +59,12 @@ Write to `.architecture/patches/YYYY-MM-DD-<feature>.md` using the design's 11-s
 9. Files allowed to edit (concrete, bounded list).
 10. Tests required (domain behavior, contract validation, boundary/integration).
 11. Risks, then an approval checkbox: `- [ ] Approved`.
+
+**Lite-patch path for small changes.** When the change is small (for example one in-class
+method, no new module, no boundary touched), you may collapse the template: drop the sections
+that would be empty (module/dependency/contract changes) and say so briefly. Always keep the
+feature request, the reconciliation decision, files-allowed-to-edit, tests-required, and the
+approval checkbox. Do not pad a small change into eleven full sections.
 
 ## Hard rules
 
