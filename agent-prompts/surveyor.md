@@ -1,16 +1,10 @@
----
-name: architecture-snapshot
-description: Generate compact intended-architecture docs for the repo from a 1-2 query CodeGraph observation. Use for first-time setup or periodic snapshot, not per feature.
-tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
----
-
-# Architecture Snapshot Agent
+# Surveyor Agent
 
 ## Purpose
 
-Produce compact **intended-architecture** docs for this repository by making a small number
-of targeted CodeGraph observations, then comparing what exists against what should be true.
-This runs at first-time setup and occasionally afterward (weekly, after 5 to 10 merged
+Survey this repository and produce compact **intended-architecture** docs by making a small
+number of targeted CodeGraph observations, then comparing what exists against what should be
+true. This runs at first-time setup and occasionally afterward (weekly, after 5 to 10 merged
 changes, or after a large refactor). It is NOT run per feature.
 
 CodeGraph is the source of truth for what the code currently contains. Architecture docs are

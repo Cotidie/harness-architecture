@@ -6,7 +6,7 @@ source_plan: "[[01-harness-mvp-iteration-roadmap]]"
 iteration: 1
 ---
 
-# Iteration 1 (Snapshot Bootstrap): Implementation Plan
+# Iteration 1 (Surveyor Bootstrap): Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development or superpowers:executing-plans to implement task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
@@ -24,12 +24,12 @@ Confirmed decisions that shape this plan:
   locked in iteration 2 when the boundaries-linter is built.
 - **Agents are first-class custom subagents** (`.claude/agents/<name>.md`), dispatched by name.
 
-**Goal:** Stand up the `architecture-snapshot` custom subagent and prove it can turn real
+**Goal:** Stand up the `surveyor` custom subagent and prove it can turn real
 CodeGraph output into compact `/architecture` docs, while seeding the intended architecture
 docs from the design.
 
 **Architecture:** Add a small throwaway Python `src/` (domain, contract, application, adapter,
-with one deliberately planted forbidden edge), let CodeGraph index it, run the snapshot agent
+with one deliberately planted forbidden edge), let CodeGraph index it, run the Surveyor
 against it to exercise the observed-snapshot path, judge the output, then delete the sample.
 The kept intended docs use the design's generic module layout as a placeholder.
 
@@ -49,8 +49,8 @@ throwaway Python sample; `codegraph` CLI / `codegraph_explore` MCP tool.
 
 ## File map
 
-- Create `.claude/agents/architecture-snapshot.md`: the snapshot subagent definition (frontmatter + prompt body).
-- Create `agent-prompts/architecture-snapshot.md`: reusable prompt body (single source; agent def duplicates it inline).
+- Create `.claude/agents/surveyor.md`: the Surveyor definition (frontmatter + prompt body).
+- Create `agent-prompts/surveyor.md`: reusable prompt body (single source; agent def duplicates it inline).
 - Create throwaway `src/` sample (deleted in Task 6):
   - `src/domain/route_risk_policy.py`, `src/domain/route_risk.py`
   - `src/contracts/route_dto.py`
@@ -61,30 +61,30 @@ throwaway Python sample; `codegraph` CLI / `codegraph_explore` MCP tool.
 
 ---
 
-### Task 1: Snapshot agent definition + prompt body
+### Task 1: Surveyor agent definition + prompt body
 
-**Files:** Create `agent-prompts/architecture-snapshot.md`, `.claude/agents/architecture-snapshot.md`
+**Files:** Create `agent-prompts/surveyor.md`, `.claude/agents/surveyor.md`
 
-**Produces:** subagent dispatchable as `Agent(subagent_type: 'architecture-snapshot')`.
+**Produces:** subagent dispatchable as `Agent(subagent_type: 'surveyor')`.
 
-- [ ] **Step 1: Write the prompt body** `agent-prompts/architecture-snapshot.md`. Must instruct the agent to:
+- [ ] **Step 1: Write the prompt body** `agent-prompts/surveyor.md`. Must instruct the agent to:
   - run at most 1 to 2 `codegraph_explore` queries to observe module/dependency/class/contract structure;
   - emit the six `/architecture` artifacts (design sec 4) plus `state.yaml` (sec 9);
   - fill `boundaries.yaml` to the sec 10 schema and `current.mmd` at boundary altitude only;
   - record observed-vs-intended drift in `graph-notes.md` where they differ;
   - obey the forbidden-behavior list (no whole-repo dump, no long source bodies, no em-dash).
-- [ ] **Step 2: Write the agent def** `.claude/agents/architecture-snapshot.md` with frontmatter:
+- [ ] **Step 2: Write the agent def** `.claude/agents/surveyor.md` with frontmatter:
 
 ```markdown
 ---
-name: architecture-snapshot
+name: surveyor
 description: Generate compact intended-architecture docs for the repo from a 1-2 query CodeGraph observation. Use for first-time setup or periodic snapshot.
 tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 ---
 ```
   Body = the prompt from Step 1 (inline).
-- [ ] **Step 3: Verify** the agent loads. Run: `ls .claude/agents/architecture-snapshot.md`. Expected: file present, valid frontmatter.
-- [ ] **Step 4: Commit.** `git add .claude/agents/architecture-snapshot.md agent-prompts/architecture-snapshot.md && git commit -m "feat: add architecture-snapshot agent"`
+- [ ] **Step 3: Verify** the agent loads. Run: `ls .claude/agents/surveyor.md`. Expected: file present, valid frontmatter.
+- [ ] **Step 4: Commit.** `git add .claude/agents/surveyor.md agent-prompts/surveyor.md && git commit -m "feat: add architecture-Surveyor"`
 
 ### Task 2: Throwaway sample src/
 
@@ -109,9 +109,9 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
   Expected: output shows the four modules, the domain -> contracts planted edge, and the allowed edges.
   If empty, sample was not indexed; re-run sync before proceeding.
 
-### Task 4: Run the snapshot agent
+### Task 4: Run the Surveyor
 
-- [ ] **Step 1: Dispatch** `Agent(subagent_type: 'architecture-snapshot')` with prompt: "Snapshot this repo.
+- [ ] **Step 1: Dispatch** `Agent(subagent_type: 'surveyor')` with prompt: "Snapshot this repo.
   Intended layout placeholder = design sec 5/10 generic module map. Report observed structure of the current
   src/ and any drift from intended."
 - [ ] **Step 2:** Capture the agent's reported CodeGraph query count from its summary.
@@ -142,8 +142,8 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 
 ## Verification (end-to-end)
 
-1. `ls .claude/agents/architecture-snapshot.md agent-prompts/architecture-snapshot.md`: both present.
-2. Re-dispatch the snapshot agent on the (now code-less) repo: it should report "no source to observe"
+1. `ls .claude/agents/surveyor.md agent-prompts/surveyor.md`: both present.
+2. Re-dispatch the Surveyor on the (now code-less) repo: it should report "no source to observe"
    gracefully and keep the intended placeholder docs. Confirms the agent degrades cleanly, which is the
    real state until iteration 2 adds code.
 3. `ls architecture/` shows all seven artifacts; `git status` clean; no `src/` left.
@@ -158,5 +158,5 @@ tools: Read, Write, Glob, Grep, mcp__codegraph__codegraph_explore
 
 ## Open decisions
 
-- **OPEN:** whether the snapshot agent needs `mcp__codegraph__codegraph_explore` explicitly in its `tools:`
+- **OPEN:** whether the Surveyor needs `mcp__codegraph__codegraph_explore` explicitly in its `tools:`
   allowlist vs inherited. Resolve on first dispatch (Task 4); if the tool is unavailable, add it to frontmatter.

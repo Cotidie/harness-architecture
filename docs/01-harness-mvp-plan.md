@@ -99,7 +99,7 @@ vs.
 Intended architecture from /architecture docs
 ```
 
-Before planning a feature, the Patch Agent must ask one targeted CodeGraph question about the affected area and compare it with the intended docs.
+Before planning a feature, the Architect must ask one targeted CodeGraph question about the affected area and compare it with the intended docs.
 
 Decision labels:
 
@@ -282,8 +282,8 @@ Create these files:
   validation/latest-report.md
 
 /agent-prompts
-  architecture-patch.md
-  scoped-coding.md
+  architect.md
+  builder.md
   architecture-validation.md
 ```
 
@@ -320,7 +320,7 @@ Start simple. Do not force this layout onto a legacy repo all at once.
 
 ## 6. Minimal Agents
 
-## Agent 1 — Architecture Patch Agent
+## Agent 1 — Architect
 
 Purpose: reconcile observed architecture with intended architecture, then propose the smallest safe architecture evolution before coding.
 
@@ -372,7 +372,7 @@ Hard rules:
 
 ---
 
-## Agent 2 — Scoped Coding Agent
+## Agent 2 — Builder
 
 Purpose: implement only the approved patch.
 
@@ -412,7 +412,7 @@ Output summary:
 
 ---
 
-## Agent 3 — Architecture Validation Agent
+## Agent 3 — Inspector
 
 Purpose: verify the implementation matches the approved patch and intended architecture.
 
@@ -456,7 +456,7 @@ REJECT: TEST FAILURE
 
 ---
 
-## 7. Optional Agent — Architecture Snapshot Agent
+## 7. Optional Agent — Surveyor
 
 Use this only occasionally, not every feature.
 
@@ -646,7 +646,7 @@ Adjust module names to the actual repo.
 1. Install/wire CodeGraph.
 2. Initialize the project once.
 3. Create /architecture and /agent-prompts.
-4. Run Architecture Snapshot Agent once.
+4. Run Surveyor once.
 5. Create architecture.md, boundaries.yaml, domain-model.md, data-contracts.md, and current.mmd.
 ```
 
@@ -654,18 +654,18 @@ Adjust module names to the actual repo.
 
 ```text
 1. User gives feature request.
-2. Patch Agent reads intended architecture docs.
-3. Patch Agent asks one targeted CodeGraph query about the affected area.
-4. Patch Agent reconciles observed architecture with intended architecture.
+2. Architect reads intended architecture docs.
+3. Architect asks one targeted CodeGraph query about the affected area.
+4. Architect reconciles observed architecture with intended architecture.
 5. If ALIGNED, continue.
 6. If DOC_DRIFT_ACCEPTED, update docs in the patch.
 7. If CODE_DRIFT_HARMFUL, propose a refactor/reconciliation patch before feature work.
 8. If UNCLEAR_DRIFT, ask human.
-9. Patch Agent writes architecture patch.
+9. Architect writes architecture patch.
 10. Human approves or edits patch.
-11. Coding Agent implements only the patch.
+11. Builder implements only the patch.
 12. Run tests.
-13. Validation Agent checks changed files/symbols with one targeted CodeGraph query.
+13. Inspector checks changed files/symbols with one targeted CodeGraph query.
 14. If accepted, update architecture docs and state.yaml.
 15. Commit code and architecture artifacts together.
 ```
