@@ -1,0 +1,32 @@
+# Intended allowed/forbidden dependencies (design section 10).
+# This is intended architecture, not a mirror of current code.
+modules:
+  domain:
+    path: "src/domain/**"
+    responsibility: "Core business concepts, invariants, and behavior"
+    may_depend_on: [shared]
+    must_not_depend_on: [client, server, application, adapters, contracts]
+
+  contracts:
+    path: "src/contracts/**"
+    responsibility: "Stable data shapes crossing boundaries"
+    may_depend_on: [shared]
+    must_not_depend_on: [client, server, application, domain, adapters]
+
+  application:
+    path: "src/application/**"
+    responsibility: "Use cases and orchestration"
+    may_depend_on: [domain, contracts, shared]
+    must_not_depend_on: [client, server, adapters]
+
+  adapters:
+    path: "src/adapters/**"
+    responsibility: "External systems, DB, APIs, framework, tools"
+    may_depend_on: [application, domain, contracts, shared]
+    must_not_depend_on: [client]
+
+  shared:
+    path: "src/shared/**"
+    responsibility: "Small primitives and utilities"
+    may_depend_on: []
+    must_not_depend_on: [client, server, application, domain, contracts, adapters]

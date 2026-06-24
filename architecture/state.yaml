@@ -1,0 +1,12 @@
+last_reconciled_commit: ""
+last_validated_commit: ""
+last_validation_time: "2026-06-25T00:00:00"
+last_reconciliation_decision: "ALIGNED"
+last_codegraph_query_scope:
+  - "src/ (throwaway sample, since removed)"
+notes:
+  - "State is metadata only. CodeGraph is source of truth for observed architecture."
+  - "Architecture docs are intended architecture, not a full code index."
+  - "Iteration 1 snapshot exercise used 1 codegraph_explore query."
+  - "Intended docs are placeholder (design generic layout); real stack locked in iteration 2."
+  - "Repo has no source code now; observed architecture is empty until iteration 2 adds the boundaries-linter."
