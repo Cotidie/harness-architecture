@@ -17,6 +17,7 @@ class _ModuleEntry:
     path_glob: str
     may_depend_on: Tuple[str, ...]
     must_not_depend_on: Tuple[str, ...]
+    may_only_depend_on: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,9 @@ class BoundaryRuleSet:
                     must_not_depend_on=tuple(
                         raw.get("must_not_depend_on", ()) or ()
                     ),
+                    may_only_depend_on=tuple(
+                        raw.get("may_only_depend_on", ()) or ()
+                    ),
                 )
             )
         if not entries:
@@ -108,10 +112,15 @@ class BoundaryRuleSet:
     ) -> List[BoundaryDecision]:
         """Decide whether a source -> target module pair breaks a rule.
 
-        Returns a list of `BoundaryDecision` results (empty when allowed). A pair
-        is flagged only when the target appears in the source module's
-        `must_not_depend_on` list. Unknown modules and self-references are
-        ignored.
+        Returns a list of `BoundaryDecision` results (empty when allowed). A
+        pair is flagged when the target appears in the source module's
+        `must_not_depend_on` list, and, separately, when the source declares a
+        present, non-empty `may_only_depend_on` allowlist and the target is a
+        known module absent from it. The allowlist is strictly opt-in: an absent
+        or empty allowlist leaves behavior unchanged. Unknown target modules
+        (stdlib / third party) and self-references are ignored, so a single edge
+        can produce both a `must_not_depend_on` and a `may_only_depend_on`
+        finding.
         """
         if not source_module or not target_module:
             return []
@@ -120,8 +129,9 @@ class BoundaryRuleSet:
         entry = self._entry(source_module)
         if entry is None:
             return []
+        decisions: List[BoundaryDecision] = []
         if target_module in entry.must_not_depend_on:
-            return [
+            decisions.append(
                 BoundaryDecision(
                     source_module=source_module,
                     target_module=target_module,
@@ -129,8 +139,22 @@ class BoundaryRuleSet:
                     file_path=file_path,
                     line=line,
                 )
-            ]
-        return []
+            )
+        if (
+            entry.may_only_depend_on
+            and self._entry(target_module) is not None
+            and target_module not in entry.may_only_depend_on
+        ):
+            decisions.append(
+                BoundaryDecision(
+                    source_module=source_module,
+                    target_module=target_module,
+                    rule_kind="may_only_depend_on",
+                    file_path=file_path,
+                    line=line,
+                )
+            )
+        return decisions
 
     def _entry(self, name: str) -> Optional[_ModuleEntry]:
         for entry in self.rules:

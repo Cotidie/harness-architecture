@@ -231,6 +231,59 @@ class ParseFailureTests(unittest.TestCase):
         self.assertIn("must_not_depend_on", output)
 
 
+_MAY_ONLY_BOUNDARIES_YAML = textwrap.dedent(
+    """\
+    modules:
+      application:
+        path: "pkg/application/**"
+        may_only_depend_on: ["domain"]
+      domain:
+        path: "pkg/domain/**"
+      adapters:
+        path: "pkg/adapters/**"
+    """
+)
+
+
+class MayOnlyDependOnIntegrationTests(unittest.TestCase):
+    def test_allowlist_violation_reported_end_to_end(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            application = os.path.join(tmp, "pkg", "application")
+            os.makedirs(application)
+            with open(os.path.join(application, "use_case.py"), "w") as handle:
+                handle.write("import pkg.adapters.thing\n")
+            adapters = os.path.join(tmp, "pkg", "adapters")
+            os.makedirs(adapters)
+            with open(os.path.join(adapters, "thing.py"), "w") as handle:
+                handle.write("x = 1\n")
+            domain = os.path.join(tmp, "pkg", "domain")
+            os.makedirs(domain)
+            with open(os.path.join(domain, "core.py"), "w") as handle:
+                handle.write("x = 1\n")
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_MAY_ONLY_BOUNDARIES_YAML)
+
+            module_rules = load_module_rules(cfg)
+            use_case = LintBoundaries()
+            rule_set = use_case.build_rule_set(module_rules)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                scan = scan_imports("pkg", rule_set)
+            finally:
+                os.chdir(cwd)
+            violations = use_case.run(
+                module_rules, scan.edges, scan.parse_failures
+            )
+
+        self.assertEqual(len(violations), 1, msg=str(violations))
+        v = violations[0]
+        self.assertEqual(v.source_module, "application")
+        self.assertEqual(v.target_module, "adapters")
+        self.assertEqual(v.rule_kind, "may_only_depend_on")
+
+
 class CleanTreeExitTests(unittest.TestCase):
     def test_clean_tree_exit_0(self):
         with tempfile.TemporaryDirectory() as tmp:

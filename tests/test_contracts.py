@@ -32,6 +32,25 @@ class ModuleRuleTests(unittest.TestCase):
         public = [n for n in vars(ModuleRule) if not n.startswith("_")]
         self.assertEqual(public, [])
 
+    def test_constructs_with_may_only_depend_on(self):
+        rule = ModuleRule(
+            name="domain",
+            path_glob="src/domain/**",
+            may_depend_on=("shared",),
+            must_not_depend_on=("contracts",),
+            may_only_depend_on=("shared",),
+        )
+        self.assertEqual(rule.may_only_depend_on, ("shared",))
+
+    def test_may_only_depend_on_defaults_to_empty_tuple(self):
+        rule = ModuleRule("domain", "src/domain/**", (), ())
+        self.assertEqual(rule.may_only_depend_on, ())
+
+    def test_frozen_with_may_only_depend_on(self):
+        rule = ModuleRule("domain", "src/domain/**", (), (), ("shared",))
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            rule.may_only_depend_on = ()
+
 
 class ImportEdgeTests(unittest.TestCase):
     def test_fields(self):
