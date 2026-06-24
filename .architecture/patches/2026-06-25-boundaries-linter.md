@@ -249,4 +249,4 @@ Boundary / integration:
 - External imports (stdlib, third party) that map to no module must be ignored,
   not reported, to avoid false positives.
 
-- [ ] Approved
+- [x] Approved (user, 2026-06-25). Authorizes iteration 3 (Builder) to implement this patch.
