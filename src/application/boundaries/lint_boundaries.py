@@ -40,6 +40,7 @@ class LintBoundaries:
         self,
         module_rules: Sequence[ModuleRule],
         import_edges: Sequence[ImportEdge],
+        parse_failures: Sequence[BoundaryViolation] = (),
     ) -> List[BoundaryViolation]:
         rule_set = self.build_rule_set(module_rules)
         violations: List[BoundaryViolation] = []
@@ -60,4 +61,8 @@ class LintBoundaries:
                         line=decision.line,
                     )
                 )
+        # Orchestration policy (patch section 5): a parse failure is a
+        # reportable finding that joins the single findings stream, so it
+        # counts toward "violations found" (exit 1), not could-not-run.
+        violations.extend(parse_failures)
         return violations

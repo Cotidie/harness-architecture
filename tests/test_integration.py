@@ -1,4 +1,8 @@
+import contextlib
+import io
 import os
+import tempfile
+import textwrap
 import unittest
 
 from src.adapters.boundaries.boundaries_config_loader import load_module_rules
@@ -8,6 +12,15 @@ from src.adapters.boundaries import cli
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+@contextlib.contextmanager
+def _capture():
+    """Capture stdout and stderr while running the CLI main entry point."""
+    out = io.StringIO()
+    err = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        yield out, err
 
 
 def _lint(target_dir, boundaries_file):
@@ -20,10 +33,10 @@ def _lint(target_dir, boundaries_file):
     cwd = os.getcwd()
     os.chdir(REPO_ROOT)
     try:
-        edges = scan_imports(target_dir, rule_set)
+        scan = scan_imports(target_dir, rule_set)
     finally:
         os.chdir(cwd)
-    return use_case.run(module_rules, edges)
+    return use_case.run(module_rules, scan.edges, scan.parse_failures)
 
 
 class SampleIntegrationTests(unittest.TestCase):
@@ -69,6 +82,174 @@ class SelfCheckTests(unittest.TestCase):
         finally:
             os.chdir(cwd)
         self.assertEqual(code, 0)
+
+
+_BOUNDARIES_YAML = textwrap.dedent(
+    """\
+    modules:
+      domain:
+        path: "pkg/domain/**"
+        must_not_depend_on: ["contracts"]
+      contracts:
+        path: "pkg/contracts/**"
+    """
+)
+
+
+class ErrorExitCodeTests(unittest.TestCase):
+    def test_nonexistent_target_dir_errors_exit_2(self):
+        boundaries = os.path.join(REPO_ROOT, "sample/boundaries.yaml")
+        with _capture() as (out, err):
+            code = cli.main(["/does/not/exist", boundaries])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("No boundary violations found.", out.getvalue())
+
+    def test_target_is_not_a_directory_errors_exit_2(self):
+        boundaries = os.path.join(REPO_ROOT, "sample/boundaries.yaml")
+        # Point the target at a file, not a directory.
+        with _capture() as (out, err):
+            code = cli.main([boundaries, boundaries])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+
+    def test_missing_config_file_errors_cleanly_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with _capture() as (out, err):
+                code = cli.main([tmp, "/no/such/boundaries.yaml"])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_malformed_yaml_errors_cleanly_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write("modules: [this: is, : broken\n")
+            with _capture() as (out, err):
+                code = cli.main([tmp, cfg])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_missing_modules_key_errors_cleanly_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write("other: {}\n")
+            with _capture() as (out, err):
+                code = cli.main([tmp, cfg])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_missing_path_key_errors_cleanly_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write("modules:\n  domain:\n    must_not_depend_on: []\n")
+            with _capture() as (out, err):
+                code = cli.main([tmp, cfg])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_bad_arg_count_exit_2(self):
+        with _capture() as (out, err):
+            code = cli.main(["only-one-arg"])
+        self.assertEqual(code, 2)
+
+
+class ZeroMatchedFilesTests(unittest.TestCase):
+    def test_target_matching_no_module_glob_errors_exit_2(self):
+        # A target dir with .py files that match no module path glob must
+        # loud-fail (exit 2), never silently report a clean tree.
+        with tempfile.TemporaryDirectory() as tmp:
+            unmatched = os.path.join(tmp, "elsewhere")
+            os.makedirs(unmatched)
+            with open(os.path.join(unmatched, "thing.py"), "w") as handle:
+                handle.write("x = 1\n")
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            with _capture() as (out, err):
+                code = cli.main([unmatched, cfg])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("No boundary violations found.", out.getvalue())
+
+    def test_empty_tree_errors_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = os.path.join(tmp, "empty")
+            os.makedirs(empty)
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            with _capture() as (out, err):
+                code = cli.main([empty, cfg])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+
+
+class ParseFailureTests(unittest.TestCase):
+    def _build_tree(self, tmp):
+        """A tree with one matched-module syntax-error file plus a clean one."""
+        domain = os.path.join(tmp, "pkg", "domain")
+        os.makedirs(domain)
+        with open(os.path.join(domain, "broken.py"), "w") as handle:
+            handle.write("def broken(:\n    pass\n")
+        with open(os.path.join(domain, "clean.py"), "w") as handle:
+            handle.write("import pkg.contracts.thing\n")
+        contracts = os.path.join(tmp, "pkg", "contracts")
+        os.makedirs(contracts)
+        with open(os.path.join(contracts, "thing.py"), "w") as handle:
+            handle.write("x = 1\n")
+        cfg = os.path.join(tmp, "boundaries.yaml")
+        with open(cfg, "w", encoding="utf-8") as handle:
+            handle.write(_BOUNDARIES_YAML)
+        return cfg
+
+    def test_syntax_error_file_reported_and_other_files_scanned(self):
+        # The scanner must keep scanning past a syntax-error file. Run from
+        # within tmp so the relative paths match the YAML globs.
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._build_tree(tmp)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(["pkg", "boundaries.yaml"])
+            finally:
+                os.chdir(cwd)
+        # A parse failure is a reportable finding: exit 1, not 2.
+        self.assertEqual(code, 1)
+        output = out.getvalue()
+        self.assertIn("parse_error", output)
+        self.assertIn("broken.py", output)
+        # The clean.py import was still scanned and flagged the planted
+        # domain -> contracts violation.
+        self.assertIn("must_not_depend_on", output)
+
+
+class CleanTreeExitTests(unittest.TestCase):
+    def test_clean_tree_exit_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            domain = os.path.join(tmp, "pkg", "domain")
+            os.makedirs(domain)
+            with open(os.path.join(domain, "ok.py"), "w") as handle:
+                handle.write("x = 1\n")
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(["pkg", "boundaries.yaml"])
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertIn("No boundary violations found.", out.getvalue())
 
 
 if __name__ == "__main__":
