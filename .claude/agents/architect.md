@@ -60,6 +60,27 @@ Write to `.architecture/patches/YYYY-MM-DD-<feature>.md` using the design's 11-s
 10. Tests required (domain behavior, contract validation, boundary/integration).
 11. Risks, then an approval checkbox: `- [ ] Approved`.
 
+In sections 7 and 8, emit **actual signatures, not prose**. For each new or changed contract
+class, write `ClassName(field: type, field: type, ...)`. For each new or changed public domain
+or application entry-point method, write `Class.method(param: type, ...) -> return_type`. Cover
+the **seam only**: new/changed contracts and public entry points. Do NOT specify private
+helpers, internal call order, or method bodies. Signatures are emitted in this repo's Python
+idiom; iteration 7 will generalize the idiom per framework profile.
+
+## Seam signatures (Inspector gate 2)
+
+After the eleven sections, add a block titled exactly `## Seam signatures (Inspector gate 2)`
+that collects every seam signature from sections 7 and 8 in one place, one per line, so the
+Inspector can verify the implementation against it. Example:
+
+```
+- ModuleRule(name: str, path_glob: str, may_depend_on: tuple[str, ...], must_not_depend_on: tuple[str, ...])
+- BoundaryRuleSet.check(edges: ..., ...) -> tuple[...]
+```
+
+If the change is a lite patch (no new contract and no new/changed public entry point), omit
+this block and say so in one line. Do not invent signatures to fill it.
+
 **Lite-patch path for small changes.** When the change is small (for example one in-class
 method, no new module, no boundary touched), you may collapse the template: drop the sections
 that would be empty (module/dependency/contract changes) and say so briefly. Always keep the
