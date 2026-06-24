@@ -31,6 +31,7 @@ class LintBoundaries:
                 "path_glob": rule.path_glob,
                 "may_depend_on": tuple(rule.may_depend_on),
                 "must_not_depend_on": tuple(rule.must_not_depend_on),
+                "may_only_depend_on": tuple(rule.may_only_depend_on),
             }
             for rule in module_rules
         ]

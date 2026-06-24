@@ -26,11 +26,11 @@ so dependency structure, domain model, and data contracts evolve on purpose, nev
   survey -> architect -> [approve] -> builder -> inspector. No per-agent skills (kept minimal).
 - **Newly added agents are not dispatchable by name until `/reload-plugins`.** During the
   session that creates an agent def, dispatch its prompt inline via a generic subagent; the
-  named type works after a reload. The iteration 7 install flow includes this reload step.
+  named type works after a reload. The iteration 9 install flow includes this reload step.
 - **Single source per agent = `.claude/agents/<name>.md`.** The separate `/agent-prompts`
   folder from the design is dropped: each agent def is self-contained (frontmatter + prompt
   body in one file), so there is no duplicate prompt copy to drift. Tool portability is not an
-  MVP requirement, and iteration 7 ships a Claude Code plugin anyway.
+  MVP requirement, and iteration 9 ships a Claude Code plugin anyway.
 - **The four agents = Surveyor, Architect, Builder, Inspector** (was Snapshot, Patch, Scoped
   Coding, Validation). Output nouns keep their names (the "patch" file, the validation report).
 - **Dogfood feature = a `boundaries.yaml` linter** — a tool that reads `boundaries.yaml` and
@@ -51,6 +51,19 @@ only then wire the full automated loop. Each slice is something you run by hand 
 feedback revises the iterations not yet detailed below — do **not** treat iterations 4+ as
 final. When we return to detail iteration N+1, we fold in what iteration N taught us.
 
+**Generalization is deferred on purpose (added 2026-06-25 from feedback):** iterations 1-6
+prove and harden the loop on this one Python repo (self-host). The harness is meant for any
+stack (Flask, React, Spring), but two things are currently specialized to the dogfood project:
+the agent prompts bake in this repo's `domain/contracts/application/adapters` vocabulary, and
+the enforcement linter is Python-`ast`-only. The fix is layered by cost. The *intended-
+architecture model* is already framework-agnostic in data (`boundaries.yaml` = named modules +
+path globs + may/must_not_depend_on); only the prompt prose and the scanner are bound. So
+**iteration 7** makes the model framework-aware (a Surveyor-written convention profile replaces
+the hardcoded ontology; the Architect emits seam signatures in the project's idiom), and
+**iteration 8** makes *enforcement* polyglot. Both are sequenced after the loop is proven and
+before packaging — shipping a Python-only-assuming harness to a React or Spring repo would
+mislead. Iterations 1-3 are done and stay intact; this generalization lands only in 4+ slices.
+
 ## Overview
 
 | # | Iteration | User-facing slice |
@@ -58,10 +71,12 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 | 1 | Surveyor bootstrap | Run one subagent → get compact intended-architecture docs (`architecture.md`, `boundaries.yaml`, `domain-model.md`, `data-contracts.md`, `current.mmd`) generated from this repo via CodeGraph. |
 | 2 | Reconcile + patch | Hand it a real feature request → subagent does 1 targeted CodeGraph query, classifies drift, writes an approvable architecture patch. |
 | 3 | Scoped coding | Approve a patch → subagent implements *only* it, touching only allowed files, no hidden architecture changes. |
-| 4 | Validation gate (light) | After coding, subagent re-checks changed symbols vs the patch and emits ACCEPT / REJECT decision. |
+| 4 | Validation gate + signature gate (light) | After coding, subagent re-checks the diff vs the patch on two gates: boundary-edge linter (zero violations) AND implemented public signatures match the patch's declared seam signatures. Emits ACCEPT / NEEDS REVISION / REJECT. |
 | 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the agents with a conditional Surveyor step-0, the approval gate, and partial-entry args; `state.yaml` + docs update on accept; code + artifacts commit together. |
 | 6 | Budget hardening (light) | Token-budget enforcement + forbidden-behavior guards (cadence triggers moved into iter5). |
-| 7 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
+| 7 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
+| 8 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
+| 9 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
 ---
 
@@ -201,19 +216,32 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 
 ---
 
-## Iteration 4 — Validation gate *(light — re-planned from feedback)*
+## Iteration 4 — Validation gate + signature gate *(light — re-planned from feedback)*
 
 - **Goal:** Close the loop's back end: after coding, mechanically check the diff against the
-  patch and intended architecture.
+  patch and intended architecture on **two** gates — boundary edges and seam signatures.
 - **User-facing value:** You get an ACCEPT / NEEDS REVISION / REJECT decision (with reason)
   on a change before you trust it — catching forbidden edges, new cycles, raw boundary
-  payloads, or out-of-patch interface drift.
-- **Mechanical gate (decided from iter 2):** the Inspector reuses the Builder's self-check, run
-  the boundaries-linter on `src/` against `.architecture/boundaries.yaml` and require zero
-  violations. The iteration-2 patch already invented this check; promote it to the standing
-  validation gate so "no forbidden edge" is verified by tooling, not just by reading the diff.
+  payloads, AND out-of-patch interface drift (a public signature that does not match what the
+  patch declared).
+- **Gate 1 — boundary edges (decided from iter 2):** the Inspector reuses the Builder's
+  self-check, run the boundaries-linter on `src/` against `.architecture/boundaries.yaml` and
+  require zero violations. The iteration-2 patch already invented this check; promote it to the
+  standing validation gate so "no forbidden edge" is verified by tooling, not just by reading
+  the diff.
+- **Gate 2 — seam signatures (new, from 2026-06-25 feedback):** the Inspector checks that the
+  implemented public signatures match the patch's declared seam signatures. This requires a
+  small **prerequisite enhancement to the Architect** (built in iter 2): patch sections 7-8
+  (domain / contract changes) must emit *actual signatures* — contract field names + types and
+  the public method signatures of the domain/application entry points the feature touches — not
+  prose. Scope is the **seam only**: new/changed contracts and public entry points, never
+  private helpers or bodies (the lite-patch path stays signature-free). Signatures here are
+  emitted in this repo's Python idiom; iteration 7 generalizes the idiom per framework profile.
 - **Prompt caveat (from iter 1-2):** the Inspector (and Surveyor) must treat CodeGraph's
   `tests:` field as *callers*, not test coverage; do not report coverage from it.
+- **Testable conditions (sketch):** a diff that adds a forbidden edge → REJECT on gate 1; a
+  diff whose public signature diverges from the patch (renamed method, changed contract field
+  type) → NEEDS REVISION on gate 2; an in-scope diff matching both → ACCEPT.
 - Detail otherwise deferred. Will fold in iteration 3's findings on whether prompt-only scope
   discipline held or needs more mechanical guards.
 
@@ -250,9 +278,39 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **Partial entry via args (not per-agent skills):** `--patch-only` (stop after the Architect),
   `--from-patch <file>` (skip to Builder for an already-approved patch), `--inspect-only`,
   `--resurvey` / `--no-survey`. This covers the non-linear cases with one skill.
-- **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 7.**
+- **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 9.**
   For self-host the agents are dispatched as named subagents; whether external users need typed
   per-agent commands is a packaging-time UX call, gated on feedback. Not built in the MVP loop.
+
+- **Trust + governance requirements (from iter-4 user-test, 2026-06-25).** Iteration 4 proved
+  the agents work but exposed that the *controls* are honor-system. The orchestrator is where
+  they get teeth. These are requirements for this iteration, not optional polish:
+  - **Approval must be unforgeable by the agent.** Today "approval" is an agent editing
+    `- [ ] Approved` to `- [x]` in the patch; in iter 4 the agent ticked its own patch. For a
+    "no silent architecture change" system that is the load-bearing control with no teeth. The
+    orchestrator must take approval from an action the agent cannot perform: a hard pause for
+    real human input, a human-signed git trailer, or a separate approval token the agent cannot
+    write. The agent must never be able to self-approve a patch.
+  - **The orchestrator runs the mechanical gates itself; it does not trust the agent's
+    self-report.** Gate 1 (run tests, run the linter self-check, diff-vs-allowed-files scope) is
+    deterministic and must be executed by the orchestrator, not reported by the Inspector. Only
+    the *judgment* part (gate-2 reconciliation, drift labeling) is delegated to the Inspector
+    agent. This is the "who verifies the Inspector" gap: a deterministic check should not depend
+    on an LLM saying it ran.
+  - **REJECT / NEEDS PATCH REVISION must define what happens next.** The Inspector report must be
+    machine-actionable (which agent to re-invoke, what to change), and the orchestrator caps the
+    revise loop with a **max-iteration** count so it cannot ping-pong or dead-end. Spell out the
+    REJECT -> Architect re-scope -> re-approve -> Builder -> Inspector cycle and its exit.
+  - **CodeGraph freshness gate before any agent query.** Each agent gets one query; the
+    orchestrator must run `codegraph sync` and confirm the index reflects the latest writes
+    before dispatching, so reconciliation does not read stale dependency edges (verbatim source
+    is current, but edges lag ~1s).
+  - **Grounded Architect signatures (gate-2 baseline).** Gate 2 only trusts the patch's declared
+    seam signatures. The Architect must derive those from CodeGraph (current signatures) and diff
+    against its proposal, so the declared seams are grounded, not invented. A wrong declared
+    signature otherwise becomes a wrong gate-2 baseline (false ACCEPT). Mechanical/AST-based
+    gate-2 extraction is deferred to iteration 8; grounding the Architect's declaration is the
+    iter-5 half.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
 ## Iteration 6 — Budget hardening *(light — re-planned from feedback)*
@@ -263,10 +321,84 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
   repo-wide exploration.
 - **Note:** survey-on-cadence and drift-trend re-survey triggers moved into iteration 5 (the
   orchestrator's conditional step-0 staleness rule), so they are not separate work here.
+- **Budget is metered, not self-reported (from iter-4 user-test).** Today each agent reports its
+  own query count and the human verifies by hand. Enforcement must measure actual tool calls
+  (the orchestrator or a hook counts `codegraph_explore` invocations) and fail/flag when an agent
+  exceeds its budget, rather than trusting the agent's summary line.
+- **Periodic full-graph drift scan (from iter-4 user-test).** The Architect classifies drift only
+  for the feature's area (correct for focus), so harmful drift *outside* every feature's area
+  accumulates invisibly until a Surveyor re-survey. Add a cheap, feature-independent full-graph
+  drift check (run on the iter-5 cadence trigger) so accumulating off-path drift is surfaced, not
+  silently carried.
 - Detail deferred. Sequenced before packaging because the loop must be proven cheap before
   it is worth shipping to others.
 
-## Iteration 7 — Packaging & install (Claude Code plugin) *(light — re-planned from feedback)*
+## Iteration 7 — Framework-aware architecture model *(light — added 2026-06-25 from feedback)*
+
+- **Goal:** Stop the harness from assuming one project's ontology. Make the intended-
+  architecture model derive from whatever framework the target repo actually uses, so the same
+  agents work on a Flask, React, or Spring repo, not only this Python/DDD self-host.
+- **User-facing value:** You run the Surveyor on a Flask (blueprints / models / services), a
+  React (features / components / hooks), or a Spring (controller / service / repository) repo
+  and the generated `boundaries.yaml` + docs name *that* framework's idiomatic modules, instead
+  of a `domain/contracts/application/adapters` template that does not fit.
+- **Why now (not earlier, not later):** the *model* is already framework-agnostic in data
+  (`boundaries.yaml` = named modules + globs + dependency rules). What is bound is (a) agent
+  **prompt prose** (`architect.md` mandates "domain class / no module-level business function /
+  no raw dict across a boundary", `surveyor.md` seeds DDD layers) and (b) the **signature
+  idiom**. Both are cheap to generalize and must precede packaging (iter 9) — you cannot ship a
+  Python-DDD-assuming harness to other stacks. Enforcement stays Python-only until iter 8.
+- **Features introduced (sketch):**
+  - **Convention profile** — a new Surveyor-written artifact (e.g. `.architecture/profile.yaml`)
+    capturing detected framework, layer vocabulary, naming rules, and signature idiom
+    (Python dataclass vs TS interface vs Java interface). This single artifact is what "honors
+    the existing structure": the Architect reads it instead of assuming DDD layers.
+  - **Surveyor framework detection** — from CodeGraph + manifest files (`requirements.txt`,
+    `package.json`, `pom.xml`/`build.gradle`), propose the idiomatic module map as the *seed*,
+    user edits/confirms. Never impose; detect then confirm.
+  - **De-hardcoded agent prompts** — Surveyor and Architect read the profile for vocabulary and
+    rules; the `domain/contracts/application/adapters` set becomes *one example profile*, not
+    the law baked into prose.
+  - **Idiomatic seam signatures** — the Architect's iter-4 signature emission renders in the
+    profile's language (Python sig / TS type / Java interface).
+- **Testable conditions (sketch):** Surveyor on a non-DDD layout (e.g. a Flask sample) produces
+  a `boundaries.yaml` naming that framework's modules and a profile recording the framework; the
+  Architect's patch for a feature on that repo uses the profile's vocabulary and signature idiom,
+  not the hardcoded DDD terms.
+- **Risks / open decisions:** how far detection goes vs always asking the user; whether the
+  profile is one file or folded into `architecture.md`. Decide when detailing, from iters 4-6
+  feedback. Enforcement (running the linter) on non-Python repos is explicitly OUT — that is
+  iteration 8.
+
+## Iteration 8 — Polyglot enforcement *(light — added 2026-06-25 from feedback)*
+
+- **Goal:** Make the *enforcement* gate language-agnostic. Iteration 7 lets the harness
+  describe a non-Python repo; iteration 8 lets it actually *check* one.
+- **User-facing value:** The validation gate (iter 4) runs on a TypeScript or Java repo and
+  reports boundary violations there, so the whole loop — not just the docs — works off Python.
+- **Why separate from iter 7:** the current scanner is Python-`ast`-only
+  (`src/adapters/boundaries/python_import_scanner.py`); supporting TS/Java imports is a real
+  parser/data-source lift, the most expensive piece of generalization. Sequenced after the
+  cheap model generalization and validated like everything else on a real sample first.
+- **Likely shape (one fork to decide when detailing):**
+  - **A) Lean on CodeGraph edges** — CodeGraph already indexes multiple languages; derive
+    import/dependency edges from the graph instead of parsing source, making the scanner an
+    adapter over CodeGraph rather than over `ast`. Polyglot "for free", couples to CodeGraph.
+  - **B) Multi-language scanner** — add per-language parsers behind the existing
+    `ScanResult` contract. More work, no CodeGraph coupling at check time.
+- **Deterministic gate-2 (from iter-4 user-test).** Iter-4 gate 2 (seam-signature conformance)
+  is LLM-judged: the Inspector reads source and compares to the patch by judgment, so it is the
+  one non-deterministic gate. Whichever signature-extraction this iteration builds per language
+  (AST or CodeGraph) should also back a **mechanical** gate-2, so signature conformance becomes a
+  deterministic check like gate 1 rather than a model opinion. Same extractor serves both.
+- **Testable conditions (sketch):** the linter on a TS or Java sample with a planted forbidden
+  edge reports it with correct file + line and exits non-zero, same contract shape as the
+  Python path; a planted signature mismatch is caught mechanically.
+- **Risks / open decisions:** the A-vs-B fork (CodeGraph-edge vs own parsers) is shape-changing
+  — surface it to the user when detailing. Relative/aliased imports per language are an edge
+  set to enumerate then.
+
+## Iteration 9 — Packaging & install (Claude Code plugin) *(light — re-planned from feedback)*
 
 - **Goal:** Turn the proven, repo-local harness into something a user installs into any repo,
   not files they hand-copy.
@@ -276,7 +408,7 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
 - **Packaging decision (locked): Claude Code plugin.** The system is entirely Claude Code
   artifacts (self-contained agent defs + a setup skill + the `/.architecture` scaffold), so it
   ships as a plugin in a marketplace rather than a binary or template repo.
-- **Likely shape (re-planned from what iters 1–5 prove must ship):**
+- **Likely shape (re-planned from what iters 1–8 prove must ship):**
   - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector), the
     `/harness-feature` orchestrator skill (iter 5), and a `harness-init` setup skill.
   - `harness-init` scaffolds `/.architecture` into the target repo, checks CodeGraph is present
@@ -284,7 +416,13 @@ final. When we return to detail iteration N+1, we fold in what iteration N taugh
     `state.yaml`.
   - Target install flow: `codegraph init` → `/plugin install` → **reload so the agents register
     by name** → `harness-init` → run surveyor once → feature loop ready.
-- **Open / depends-on:** which files actually need to ship (decided by iters 1–5), and whether
-  CodeGraph install can be checked/guided by the setup skill or stays fully manual.
-- Detail deferred. Sequenced last: packaging is only worth doing once the loop is proven cheap
-  and useful (iters 1–6).
+  - **Reload is a verified gate, not a hint (from iter-4 user-test).** A newly installed agent is
+    not dispatchable by name until `/reload-plugins`; before that the loop falls back to inline
+    general-purpose dispatch. `harness-init` must verify the four agents resolve by name (and
+    block / instruct the reload if not) so a fresh install's first loop does not silently run on
+    the fallback path.
+- **Open / depends-on:** which files actually need to ship (decided by iters 1–8, including the
+  convention profile and any polyglot scanner), and whether CodeGraph install can be
+  checked/guided by the setup skill or stays fully manual.
+- Detail deferred. Sequenced last: packaging is only worth doing once the loop is proven cheap,
+  useful, and framework-general (iters 1–8).

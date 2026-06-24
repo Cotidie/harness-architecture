@@ -14,7 +14,10 @@ The boundaries linter's payload shapes (frozen dataclasses under
 
 - `ModuleRule` (`module_rule.py`): one module entry loaded from
   `boundaries.yaml`. Crosses the YAML-load boundary (loader -> application).
-  Fields: `name`, `path_glob`, `may_depend_on`, `must_not_depend_on`.
+  Fields: `name`, `path_glob`, `may_depend_on`, `must_not_depend_on`,
+  `may_only_depend_on`. The `may_only_depend_on` field is an optional opt-in
+  allowlist defaulting to an empty tuple; an absent or empty value leaves
+  behavior unchanged.
 - `ImportEdge` (`import_edge.py`): one resolved module-level import. Crosses the
   scanner -> application boundary. Fields: `source_module`, `imported_module`,
   `file_path`, `line`.
@@ -22,11 +25,13 @@ The boundaries linter's payload shapes (frozen dataclasses under
   the application -> reporter boundary, and (for parse failures) the scanner ->
   application -> reporter boundary. Fields: `source_module`, `target_module`,
   `rule_kind`, `file_path`, `line`.
-  - `rule_kind` value set: `"must_not_depend_on"` (a dependency-rule violation)
-    and `"parse_error"` (a file that could not be parsed; the affected file is
-    in `file_path`/`line`, and `source_module`/`target_module` carry its module
-    context). The `parse_error` value expands the accepted value space of the
-    existing contract; it adds no new field and no new class.
+  - `rule_kind` value set: `"must_not_depend_on"` (a dependency-rule
+    violation), `"may_only_depend_on"` (a known target absent from a present,
+    non-empty allowlist), and `"parse_error"` (a file that could not be parsed;
+    the affected file is in `file_path`/`line`, and
+    `source_module`/`target_module` carry its module context). The
+    `may_only_depend_on` and `parse_error` values expand the accepted value
+    space of the existing contract; they add no new field and no new class.
 
 ## Intended rules
 

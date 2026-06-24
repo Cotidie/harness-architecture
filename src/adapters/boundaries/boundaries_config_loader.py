@@ -64,6 +64,9 @@ def load_module_rules(boundaries_path: str) -> Tuple[ModuleRule, ...]:
                 must_not_depend_on=tuple(
                     spec.get("must_not_depend_on", []) or []
                 ),
+                may_only_depend_on=tuple(
+                    spec.get("may_only_depend_on", []) or []
+                ),
             )
         )
     return tuple(rules)

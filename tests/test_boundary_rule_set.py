@@ -118,6 +118,173 @@ class CheckTests(unittest.TestCase):
         )
 
 
+class MayOnlyDependOnTests(unittest.TestCase):
+    def _rule_set(self):
+        return BoundaryRuleSet.from_rules(
+            [
+                {
+                    "name": "application",
+                    "path_glob": "sample/application/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                    "may_only_depend_on": ("domain", "contracts"),
+                },
+                {
+                    "name": "domain",
+                    "path_glob": "sample/domain/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+                {
+                    "name": "contracts",
+                    "path_glob": "sample/contracts/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+                {
+                    "name": "adapters",
+                    "path_glob": "sample/adapters/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+            ]
+        )
+
+    def test_target_on_allowlist_is_allowed(self):
+        rs = self._rule_set()
+        self.assertEqual(
+            rs.check(
+                source_module="application",
+                target_module="domain",
+                file_path="sample/application/plan_route.py",
+                line=3,
+            ),
+            [],
+        )
+
+    def test_known_target_not_on_allowlist_is_flagged(self):
+        rs = self._rule_set()
+        violations = rs.check(
+            source_module="application",
+            target_module="adapters",
+            file_path="sample/application/plan_route.py",
+            line=4,
+        )
+        self.assertEqual(len(violations), 1)
+        v = violations[0]
+        self.assertEqual(v.source_module, "application")
+        self.assertEqual(v.target_module, "adapters")
+        self.assertEqual(v.rule_kind, "may_only_depend_on")
+        self.assertEqual(v.file_path, "sample/application/plan_route.py")
+        self.assertEqual(v.line, 4)
+
+    def test_unknown_target_is_ignored(self):
+        # An import resolving to no known module (stdlib / third party) is not
+        # flagged even when the source has a non-empty allowlist.
+        rs = self._rule_set()
+        self.assertEqual(
+            rs.check(
+                source_module="application",
+                target_module=None,
+                file_path="sample/application/plan_route.py",
+                line=5,
+            ),
+            [],
+        )
+
+    def test_self_reference_is_ignored(self):
+        rs = self._rule_set()
+        self.assertEqual(
+            rs.check(
+                source_module="application",
+                target_module="application",
+                file_path="sample/application/plan_route.py",
+                line=6,
+            ),
+            [],
+        )
+
+    def test_module_without_allowlist_key_is_unaffected(self):
+        rs = self._rule_set()
+        # `domain` declares no may_only_depend_on, so any edge is allowed by it.
+        self.assertEqual(
+            rs.check(
+                source_module="domain",
+                target_module="adapters",
+                file_path="sample/domain/route_risk_policy.py",
+                line=7,
+            ),
+            [],
+        )
+
+    def test_empty_allowlist_is_opt_out(self):
+        # Chosen semantics (patch section 11): an empty `may_only_depend_on`
+        # list is treated as opt-out, leaving behavior unchanged. So a known
+        # target is NOT flagged when the allowlist is present but empty.
+        rs = BoundaryRuleSet.from_rules(
+            [
+                {
+                    "name": "application",
+                    "path_glob": "sample/application/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                    "may_only_depend_on": (),
+                },
+                {
+                    "name": "adapters",
+                    "path_glob": "sample/adapters/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+            ]
+        )
+        self.assertEqual(
+            rs.check(
+                source_module="application",
+                target_module="adapters",
+                file_path="sample/application/plan_route.py",
+                line=8,
+            ),
+            [],
+        )
+
+    def test_must_not_depend_on_still_works_with_allowlist(self):
+        # Regression: must_not_depend_on behavior is unchanged. A module that
+        # declares both can produce two findings for the same edge (one per
+        # distinct rule_kind).
+        rs = BoundaryRuleSet.from_rules(
+            [
+                {
+                    "name": "application",
+                    "path_glob": "sample/application/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": ("adapters",),
+                    "may_only_depend_on": ("domain",),
+                },
+                {
+                    "name": "adapters",
+                    "path_glob": "sample/adapters/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+                {
+                    "name": "domain",
+                    "path_glob": "sample/domain/**",
+                    "may_depend_on": (),
+                    "must_not_depend_on": (),
+                },
+            ]
+        )
+        violations = rs.check(
+            source_module="application",
+            target_module="adapters",
+            file_path="sample/application/plan_route.py",
+            line=9,
+        )
+        kinds = sorted(v.rule_kind for v in violations)
+        self.assertEqual(kinds, ["may_only_depend_on", "must_not_depend_on"])
+
+
 class FactoryInvariantTests(unittest.TestCase):
     def test_frozen_cannot_mutate(self):
         rs = _sample_rule_set()
