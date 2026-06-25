@@ -314,6 +314,12 @@ generalization lands only in 4+ slices.
     signature otherwise becomes a wrong gate-2 baseline (false ACCEPT). Mechanical/AST-based
     gate-2 extraction is deferred to iteration 9; grounding the Architect's declaration is the
     iter-5 half.
+- **Slice split decided when detailing (2026-06-25), see [`06-iteration-5-orchestrator-plan.md`](06-iteration-5-orchestrator-plan.md).** The five
+  requirements are real but ship in two slices to dogfood sooner. **Iter 5 builds:** unforgeable
+  approval, orchestrator-runs-gate-1, grounded Architect signatures (the correctness-critical
+  one, kept in because a wrong baseline is a false ACCEPT), and plain `codegraph sync`. **Iter 5b
+  defers:** CodeGraph freshness *verification* (beyond plain sync) and the capped REJECT -> revise
+  loop. Budget metering stays iter 6 as before.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
 ## Iteration 6 — Budget hardening *(light — re-planned from feedback)*
