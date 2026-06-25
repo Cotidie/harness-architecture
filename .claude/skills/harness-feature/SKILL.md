@@ -23,6 +23,16 @@ and `inspector` subagents by name, run the deterministic checks and git yourself
 - **Grounded baseline.** The Architect grounds its declared seam signatures in CodeGraph
   (`current -> proposed` / `NEW` / `UNVERIFIED`). Gate 2 checks the implementation against those.
   If the patch's seam block contains an `UNVERIFIED` seam, surface it at the approval pause.
+- **Fresh index before every query.** Before dispatching any agent that queries CodeGraph
+  (Surveyor, Architect, Inspector), run the **freshness check**: `codegraph sync`, then
+  `codegraph status --json` and require `pendingChanges.added`, `.modified`, `.removed` all 0 and
+  `worktreeMismatch` null. If still stale after one re-sync, STOP with a freshness failure; never
+  dispatch an agent against a stale index (the watcher lags writes ~1s).
+- **Metered budget, not self-report.** A `PreToolUse` hook counts real `codegraph_explore` calls
+  into `.architecture/.budget/query-count`. Reset it to 0 at loop start; read it before and after
+  each agent dispatch; the delta is that agent's actual query count. Require delta <= 1 (the
+  per-agent budget). Flag any overage in the summary; a gross breach (delta >= 3) is a hard STOP.
+  Report the metered counts, not the agents' self-reported ones.
 - Never use em-dash in anything you write.
 
 ## Flags (partial entry)
@@ -32,8 +42,13 @@ and `inspector` subagents by name, run the deterministic checks and git yourself
 - `--inspect-only` : skip to step 4, run gate 1 + the Inspector on the current working diff.
 - `--resurvey` : force step 0 to re-survey.
 - `--no-survey` : force step 0 to skip.
+- `--drift-scan` : force step 0b (full-graph drift scan) to run.
 
 ## The loop
+
+**At loop start (before step 0):** reset the budget meter:
+`mkdir -p .architecture/.budget && echo 0 > .architecture/.budget/query-count`. Every agent
+dispatch below is metered against it (see controls).
 
 ### Step 0 (conditional): re-survey
 
@@ -50,11 +65,28 @@ Decide by a logged rule, not intuition:
    since last`). A re-survey rewrites the intended docs, so treat it as a reviewable doc change,
    not a silent refresh.
 
+### Step 0b (conditional): full-graph drift scan
+
+Run this whenever step 0's cadence fires (code-commit count over threshold, `--resurvey`, or
+`--drift-scan`). It is **feature-independent**: it checks the WHOLE repo, not the feature's area,
+to surface drift that accumulates outside any single feature. Two cheap checks, no new code:
+
+1. Full linter self-check repo-wide: `python -m src.adapters.boundaries.cli src
+   .architecture/boundaries.yaml`; report any forbidden edge anywhere in `src/`.
+2. One `codegraph_explore` query for the module-level edge summary; flag any observed module or
+   cross-module edge NOT represented in `.architecture/boundaries.yaml` (undeclared structural
+   drift).
+
+Write a short `.architecture/validation/drift-scan.md` (date, forbidden edges, undeclared
+modules/edges) and surface it. Report only; resolving drift is a human/Architect decision, never
+automatic. This query is metered and freshness-gated like any other.
+
 ### Step 1: Architect -> patch
 
-Dispatch the `architect` subagent with the feature request and the `.architecture/` docs. Before
-dispatching, run `codegraph sync` (plain sync; rigorous freshness verification is deferred, see
-below). Capture: the patch path, the reconciliation label, and the query count.
+Before dispatching, run the **freshness check** (see controls) and read the metered query-count.
+Dispatch the `architect` subagent with the feature request and the `.architecture/` docs. After
+it returns, read the counter again: the delta is the Architect's metered query count (require
+<= 1). Capture: the patch path, the reconciliation label, and the metered query count.
 
 ### Step 2: APPROVAL PAUSE (unforgeable)
 
@@ -93,12 +125,12 @@ If any fails, STOP. Emit the failing check as the verdict and do NOT dispatch th
 
 ### Step 5: Inspector for judgment (gate 2 + verdict)
 
-If gate 1 passed, dispatch the `inspector` subagent. Tell it gate 1 already passed (by you), so
-it performs gate 2 (seam-signature conformance against the patch's grounded `proposed`
-signatures) and the reconciliation check, and emits the final label + writes the report.
-
-(Follow-up, out of scope here: trim the Inspector's now-redundant self-run of gate 1 now that the
-orchestrator owns it.)
+If gate 1 passed, run the **freshness check** and read the metered query-count, then dispatch the
+`inspector` subagent. The Inspector (iter-6 def) does gate 2 + the design check list + verdict
+ONLY: it does not re-run gate 1 and does not bump state. Tell it gate 1 already passed (by you).
+It emits the final label, writes the report, and a `## Next action` block the revise loop reads.
+After it returns, read the counter: the delta is the Inspector's metered query count (require
+<= 1).
 
 ### Step 6: on ACCEPT, auto-commit
 
@@ -115,19 +147,38 @@ If the verdict is `ACCEPT` or `ACCEPT WITH DOC UPDATE`:
    names the feature commit whose code it validated.
 6. Report the feature SHA.
 
-Note: the Inspector (iter-4 def) may also bump `state.yaml` on ACCEPT, to the pre-feature HEAD.
-Under this orchestrator the orchestrator owns state, so overwrite the Inspector's bump with the
-feature SHA in step 5. (Follow-up for iter 5b: stop the Inspector self-bumping under orchestration.)
+The Inspector (iter-6 def) does not touch `state.yaml`; the orchestrator owns the bump here.
 
-On any non-ACCEPT verdict (`NEEDS PATCH REVISION` / any `REJECT`): STOP, surface the report, and
-await the human. Do NOT auto-loop (the capped revise loop is deferred, see below).
+### Step 7: on non-ACCEPT, the capped revise loop
 
-## Deferred to iter 5b / 6 (this skill does NOT yet enforce)
+On any non-ACCEPT verdict, read the Inspector report's `## Next action` block and route. A run
+may execute **at most 2** revise cycles; track the count.
 
-- CodeGraph freshness *verification* gate: this slice runs plain `codegraph sync` only; verifying
-  the index actually reflects HEAD before each query is deferred.
-- Budget metering by actual tool calls (query counts are still self-reported by each agent).
-- The `REJECT -> Architect re-scope -> re-approve -> Builder -> Inspector` auto-revise loop with a
-  max-iteration cap. This slice stops and asks the human instead.
+- `NEEDS PATCH REVISION`, or `REJECT: CONTRACT VIOLATION` / `REJECT: DOMAIN MODEL VIOLATION`
+  (design-level): dispatch `architect` to revise the patch (re-scope / fix the declared seam),
+  then RE-ENTER the approval pause (step 2: a real human turn; the orchestrator never re-approves
+  a revised patch itself), then `builder` (step 3) -> orchestrator gate 1 (step 4) ->
+  `inspector` (step 5).
+- `REJECT: ARCHITECTURE VIOLATION` / `REJECT: TEST FAILURE` (code-level, patch unchanged):
+  dispatch `builder` to fix within the SAME approved patch -> orchestrator gate 1 -> `inspector`.
+  No re-approval (the approved patch did not change).
 
-(Grounded Architect signatures are IN this slice, enforced by `architect.md`, not deferred.)
+If a cycle reaches ACCEPT, go to step 6. If the cap (2 cycles) is exceeded, STOP and surface the
+latest report with "revise cap reached, human intervention required". The cap prevents ping-pong
+and dead-ends; the unforgeable-approval rule still holds on every patch revision.
+
+## Enforced as of iteration 6
+
+All the iter-5 honor-system gaps now have teeth:
+
+- **Unforgeable approval** (iter 5): every patch revision re-enters the human approval pause.
+- **Orchestrator-run gate 1** (iter 5): the orchestrator runs tests + self-check + scope itself.
+- **Grounded signatures** (iter 5): the Architect grounds seam signatures in CodeGraph.
+- **Freshness verification** (iter 6): `codegraph status --json` must be clean before any query.
+- **Metered budget** (iter 6): a PreToolUse hook counts real `codegraph_explore` calls; the
+  orchestrator enforces the per-agent budget from the metered delta, not self-report.
+- **Capped revise loop** (iter 6): non-ACCEPT routes back through Architect/Builder, max 2 cycles.
+- **Full-graph drift scan** (iter 6): a feature-independent repo-wide drift check on the cadence.
+
+Inspector (iter-6 def) does gate 2 + verdict + `## Next action` only; the orchestrator owns
+gate 1 and `state.yaml`.
