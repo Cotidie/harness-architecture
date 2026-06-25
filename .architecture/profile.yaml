@@ -1,0 +1,42 @@
+# Convention profile (iteration 8): the project's ARCHITECTURE ONTOLOGY as data.
+#
+# This is the single artifact that "honors the existing structure". The agents
+# read their vocabulary from here instead of baking one framework's ontology
+# (DDD) into prose. boundaries.yaml stays the per-module dependency RULES; this
+# file is the ontology META on top: what framework, which layer plays which
+# role, what to call things, and how signatures are spelled.
+#
+# Schema:
+#   framework       : a label for the project's framework/style (e.g. python-ddd,
+#                     python/flask, js/react). Confirmed by a human.
+#   language        : the primary language.
+#   detected_from   : evidence the profile was seeded from (manifests, layout).
+#   roles           : mapping of ABSTRACT harness role -> this project's layer
+#                     name. The agents reason in roles; the profile resolves them
+#                     to concrete layers:
+#                       behavior_layer       : where business behavior lives.
+#                       boundary_shape_layer : where cross-boundary payloads are defined.
+#                       entrypoint_layer     : use cases / orchestration entry points.
+#                       io_layer             : external systems, frameworks, tools.
+#   vocabulary      : the NOUNS agents should use when proposing changes:
+#                       boundary_shape : what a cross-boundary payload is called here.
+#                       behavior_unit  : what a unit of business behavior is called here.
+#   signature_idiom : how seam signatures are spelled in this language (recorded
+#                     here in iteration 8; the semantic normalizer that makes the
+#                     diff compare meaning rather than exact text is iteration 9).
+framework: python-ddd
+language: python
+detected_from:
+  - requirements.txt
+  - "src/ layered layout (domain/contracts/application/adapters)"
+roles:
+  behavior_layer: domain
+  boundary_shape_layer: contracts
+  entrypoint_layer: application
+  io_layer: adapters
+vocabulary:
+  boundary_shape: "contract class (frozen dataclass under src/contracts/)"
+  behavior_unit: "domain class or method under src/domain/"
+signature_idiom:
+  contract: "ClassName(field: Type, ...)"
+  method: "Class.method(param: Type, ...) -> Return"
