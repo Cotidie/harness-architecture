@@ -535,3 +535,23 @@ git commit -m "refactor(iter-9b): retire LLM-judged gate 2; Inspector reads the 
 - **Spec coverage:** signatures from CodeGraph (Tasks 1-2), deterministic polyglot signature diff via injectable seam (Task 3), contract fields stay ast (Task 3 leaves `_observed_contracts` untouched), re-curate (Task 4), unified surface wiring (Task 5), retire LLM gate 2 (Task 6). All roadmap 9b clauses covered.
 - **Placeholder scan:** every code step shows real code; Task 4 values are repo-derived at run time by design (re-curation is "make declared equal observed"), with exact verify commands and expected exit codes.
 - **Type consistency:** `SignatureNode` fields used identically in Tasks 1-2; `observe_domain_fn(domain_dir) -> Dict[str, Dict[str, str]]` consistent across Tasks 3 and 5; `normalize_signature` applied to declared, ast-observed, and CodeGraph-observed signatures so all three compare in the same space.
+
+---
+
+## Results (shipped 2026-06-26)
+
+Branch `iter9b-codegraph-signatures`, 8 commits on base `d07b0bb`. Full suite 123 tests OK. Final whole-branch review (opus): READY TO MERGE, no Critical or Important findings.
+
+What shipped:
+- `codegraph_index.observed_signature_nodes`: schema-guarded, read-only read of method/function `signature` from the index, with `qualified_name` carrying `Class::method`.
+- `codegraph_scanner.normalize_signature` + `observed_domain_from_index`: receiver-stripping, whitespace-collapsing normalizer and a `{Class: {method: signature}}` mapper scoped by domain path glob (free functions excluded).
+- `intended_diff.compute_diff` reads domain signatures through an injectable `observe_domain_fn` (CodeGraph default, `ast` `_observed_domain` injected for un-indexed temp-tree tests). `normalize_signature` applied to declared, ast-observed, and CodeGraph-observed signatures, so all three compare in one space. Contract field diffing stays `ast` (the index has no reliable field nodes).
+- `.architecture/domain-model.yaml` re-curated to the normalized rendering; real-repo `intended_diff` is ALIGNED via CodeGraph.
+- `harness_check.compute_results` plumbs `observe_domain_fn` (mirrors the 9a `scan_fn` seam); CLI keeps the CodeGraph default.
+- LLM-judged gate 2 retired: `inspector.md` + `harness-feature/SKILL.md` now have the orchestrator run `harness_check --only intended_diff` as the deterministic gate-2 input, which the Inspector reads (no longer re-derives signatures via `codegraph_explore`; that query is now at most 1, for the design check list, and may be 0).
+
+Empirical proof of symmetric normalization: stripping the `self` receiver from the curated `module_for_path`/`check` signatures (M4 fix) left `intended_diff` ALIGNED, because the normalizer strips the receiver on both the declared and the observed side.
+
+Residual gaps:
+- Contract FIELD diffing is the lone remaining `ast` holdout (no field nodes in the index). This is the next candidate if the single-observed-source goal is to be fully closed.
+- Deferred cosmetic Minors (M1 double-normalize in `_observed_domain`, M2 `%`-format in a test helper, M3 `_norm` docstring scope); none affect behavior.
