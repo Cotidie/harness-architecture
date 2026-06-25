@@ -1,14 +1,16 @@
 """Harness tooling: seed a convention profile from a repo (iteration 8).
 
 A committed, deterministic detector that proposes the SEED for
-`.architecture/profile.yaml`. It is intentionally humble: it detects the
-language reliably, names the framework from known manifest libraries, and lists
-the candidate top-level layers. It does NOT map layers to roles: a built-in
-directory-name-to-role heuristic would just be a smaller baked ontology, the
-exact thing iteration 8 removes. The role mapping is the human's confirm step
-(detect-then-confirm).
+`.architecture/profile.yaml`. It is intentionally humble and FRAMEWORK-AGNOSTIC:
+it detects the language, reports the raw manifest dependencies verbatim, and
+lists the candidate top-level layers. It does NOT classify the framework (no
+built-in list of frameworks to match against) and does NOT map layers to roles.
+Both of those would bake an enumeration the harness must not own: there are too
+many frameworks, and a directory-name-to-role heuristic is just a smaller baked
+ontology. Naming the project (a free-text label) and mapping roles is the
+human's confirm step (detect-then-confirm).
 
-This is the mechanical half of the Surveyor's framework detection, committed and
+This is the mechanical half of the Surveyor's profile seeding, committed and
 unit-tested like `scripts/drift_scan.py` and `scripts/intended_diff.py`.
 """
 
@@ -28,35 +30,11 @@ CODE_EXTENSIONS = {
     ".java": "java",
 }
 
-# Short prefix used in framework_guess, per language.
-LANG_SHORT = {
-    "python": "python",
-    "javascript": "js",
-    "typescript": "ts",
-    "java": "java",
-}
-
-# Known dependency library -> framework label. Names frameworks only; it never
-# maps directory names to roles.
-KNOWN_LIBS = {
-    "flask": "python/flask",
-    "django": "python/django",
-    "fastapi": "python/fastapi",
-    "react": "js/react",
-    "next": "js/next",
-    "vue": "js/vue",
-    "express": "js/express",
-    "spring": "java/spring",
-    "spring-boot": "java/spring",
-}
-
-
 @dataclass(frozen=True)
 class ProfileSeed:
     language: str
     manifests_found: Tuple[str, ...]
     libs: Tuple[str, ...]
-    framework_guess: str
     candidate_layers: Tuple[str, ...]
 
 
@@ -160,39 +138,30 @@ def _dir_has_code(path: str) -> bool:
     return False
 
 
-def _guess_framework(language: Optional[str], libs: List[str]) -> str:
-    for lib in sorted(set(libs)):
-        if lib in KNOWN_LIBS:
-            return KNOWN_LIBS[lib]
-    if language and language in LANG_SHORT:
-        return "%s/unknown" % (LANG_SHORT[language],)
-    return "unknown"
-
-
 def compute_profile_seed(target_dir: str, source_dir: str) -> ProfileSeed:
     manifests, libs = _collect_manifests(target_dir)
     language = _language_from_manifests(manifests) or _language_from_extensions(
         source_dir
     ) or "unknown"
-    framework_guess = _guess_framework(
-        language if language != "unknown" else None, libs
-    )
     return ProfileSeed(
         language=language,
         manifests_found=tuple(manifests),
         libs=tuple(sorted(set(libs))),
-        framework_guess=framework_guess,
         candidate_layers=_candidate_layers(source_dir),
     )
 
 
 def format_seed(seed: ProfileSeed) -> str:
     lines = ["# Profile seed (detect-then-confirm). Edit and save into profile.yaml.", ""]
-    lines.append("framework: %s   # confirm" % (seed.framework_guess,))
+    lines.append("label:    # free-text human note for this project; NOTHING branches on it")
     lines.append("language: %s" % (seed.language,))
     lines.append("detected_from:")
     for manifest in seed.manifests_found or ["(no manifest; inferred from file extensions)"]:
         lines.append("  - %s" % (manifest,))
+    if seed.libs:
+        lines.append("# manifest dependencies detected (verbatim, for your reference):")
+        for lib in seed.libs:
+            lines.append("#   - %s" % (lib,))
     lines.append("# candidate layers detected (map each to a role below):")
     for layer in seed.candidate_layers or ["(none detected)"]:
         lines.append("#   - %s" % (layer,))

@@ -14,7 +14,7 @@ class ProfileFixtureTest(unittest.TestCase):
     def test_detection_names_flask_layers_not_ddd(self):
         seed = compute_profile_seed(FIXTURE, FIXTURE)
         self.assertEqual(seed.language, "python")
-        self.assertEqual(seed.framework_guess, "python/flask")
+        self.assertIn("flask", seed.libs)
         self.assertEqual(
             seed.candidate_layers, ("blueprints", "models", "services")
         )

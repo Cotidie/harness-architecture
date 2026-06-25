@@ -6,9 +6,14 @@
 # file is the ontology META on top: what framework, which layer plays which
 # role, what to call things, and how signatures are spelled.
 #
+# The harness is FRAMEWORK-AGNOSTIC: nothing in it branches on a framework name.
+# It reasons in the universal axes below (language, layer ROLES, vocabulary,
+# signature idiom). Any project fills these in; there is no built-in list of
+# frameworks to recognize. `label` is a free-text human note only.
+#
 # Schema:
-#   framework       : a label for the project's framework/style (e.g. python-ddd,
-#                     python/flask, js/react). Confirmed by a human.
+#   label           : a free-text human note for this project (e.g. "python-ddd",
+#                     "flask app"). NOTHING branches on it; it is documentation.
 #   language        : the primary language.
 #   detected_from   : evidence the profile was seeded from (manifests, layout).
 #   roles           : mapping of ABSTRACT harness role -> this project's layer
@@ -24,7 +29,7 @@
 #   signature_idiom : how seam signatures are spelled in this language (recorded
 #                     here in iteration 8; the semantic normalizer that makes the
 #                     diff compare meaning rather than exact text is iteration 9).
-framework: python-ddd
+label: python-ddd   # free-text note only; nothing branches on it
 language: python
 detected_from:
   - requirements.txt

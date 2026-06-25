@@ -17,9 +17,10 @@ observed and intended conflict, classify the mismatch before proposing the chang
 
 ## Read first (intended architecture)
 
-- `.architecture/profile.yaml` : the project's convention profile (framework, layer ROLES,
-  vocabulary, signature idiom). Read this FIRST: it tells you what this project calls its layers
-  and shapes, so you propose changes in the project's own idiom, not a fixed DDD template.
+- `.architecture/profile.yaml` : the project's convention profile (layer ROLES, vocabulary,
+  signature idiom; the harness is framework-agnostic and branches on none of these by name). Read
+  this FIRST: it tells you what this project calls its layers and shapes, so you propose changes in
+  the project's own idiom, not a fixed DDD template.
 - `.architecture/architecture.md` : intended module map, boundaries, risks.
 - `.architecture/boundaries.yaml` : intended allowed/forbidden dependencies.
 - `.architecture/contracts.yaml` : the intended contract DEFINITIONS as data (iteration 7).

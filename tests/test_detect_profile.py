@@ -34,7 +34,7 @@ class DetectProfileTest(unittest.TestCase):
         ) as root:
             seed = compute_profile_seed(root, root)
         self.assertEqual(seed.language, "python")
-        self.assertEqual(seed.framework_guess, "python/flask")
+        self.assertIn("flask", seed.libs)
         self.assertEqual(seed.candidate_layers, ("blueprints", "models", "services"))
 
     def test_self_host_like_no_web_framework(self):
@@ -51,7 +51,7 @@ class DetectProfileTest(unittest.TestCase):
         ) as root:
             seed = compute_profile_seed(root, os.path.join(root, "src"))
         self.assertEqual(seed.language, "python")
-        self.assertEqual(seed.framework_guess, "python/unknown")
+        self.assertIn("pyyaml", seed.libs)
         self.assertEqual(seed.candidate_layers, ("adapters", "contracts", "domain"))
 
     def test_react_package_json(self):
@@ -65,7 +65,7 @@ class DetectProfileTest(unittest.TestCase):
         ) as root:
             seed = compute_profile_seed(root, root)
         self.assertEqual(seed.language, "javascript")
-        self.assertEqual(seed.framework_guess, "js/react")
+        self.assertIn("react", seed.libs)
         self.assertEqual(seed.candidate_layers, ("components", "hooks"))
 
     def test_no_manifest_infers_language_from_extensions(self):
@@ -77,7 +77,7 @@ class DetectProfileTest(unittest.TestCase):
         ) as root:
             seed = compute_profile_seed(root, root)
         self.assertEqual(seed.language, "python")
-        self.assertEqual(seed.framework_guess, "python/unknown")
+        self.assertEqual(seed.libs, ())
         self.assertEqual(seed.manifests_found, ())
 
     def test_pycache_and_codeless_dirs_excluded(self):
@@ -97,7 +97,7 @@ class DetectProfileTest(unittest.TestCase):
         with _tree({"README.md": "# empty\n"}) as root:
             seed = compute_profile_seed(root, root)
         self.assertEqual(seed.language, "unknown")
-        self.assertEqual(seed.framework_guess, "unknown")
+        self.assertEqual(seed.libs, ())
         self.assertEqual(seed.candidate_layers, ())
 
 

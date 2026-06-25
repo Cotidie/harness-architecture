@@ -45,16 +45,18 @@ index; CodeGraph already serves that role.
 ## Detect the profile (detect-then-confirm, before observing)
 
 1. Run `python -m scripts.detect_profile <repo> <source_dir>` (source_dir is the code root, e.g.
-   `src`). It returns the language, the framework guessed from manifest libraries, and the
-   candidate top-level layers. It does NOT map layers to roles; that is your + the human's job.
-2. Write `.architecture/profile.yaml` from the seed: set `framework`, `language`, `detected_from`,
-   then MAP each role (`behavior_layer`, `boundary_shape_layer`, `entrypoint_layer`, `io_layer`)
-   to one of the detected candidate layers, fill `vocabulary` (what this framework calls a
-   boundary shape and a behavior unit), and record the `signature_idiom`.
-3. Present the role mapping to the human for confirmation. Never impose a mapping; if the
-   framework or roles are unclear, say so and ask. A wrong profile shapes everything downstream.
+   `src`). It returns the language, the raw manifest dependencies (verbatim), and the candidate
+   top-level layers. It does NOT classify a framework and does NOT map layers to roles; the harness
+   is framework-agnostic, so naming the project and mapping roles is your + the human's job.
+2. Write `.architecture/profile.yaml` from the seed: set `label` (a free-text note; nothing
+   branches on it), `language`, `detected_from`, then MAP each role (`behavior_layer`,
+   `boundary_shape_layer`, `entrypoint_layer`, `io_layer`) to one of the detected candidate layers,
+   fill `vocabulary` (what THIS project calls a boundary shape and a behavior unit), and record the
+   `signature_idiom`.
+3. Present the role mapping to the human for confirmation. Never impose a mapping; if the roles are
+   unclear, say so and ask. A wrong profile shapes everything downstream.
 4. Use the confirmed profile's vocabulary when writing all the docs below (name layers and shapes
-   in the project's idiom, not a hardcoded DDD ontology).
+   in the project's own idiom, not a hardcoded DDD ontology).
 
 ## What to observe (1 to 2 queries)
 
@@ -75,9 +77,10 @@ test coverage from it. If you want to note coverage, say it is unverified.
 
 Write to `.architecture/` (create the directory and `.architecture/diagrams/`):
 
-1. `profile.yaml` : the confirmed convention profile (framework, layer roles, vocabulary,
-   signature idiom), authored via the "Detect the profile" step above. Write this first; the
-   other docs use its vocabulary.
+1. `profile.yaml` : the confirmed convention profile (free-text label, language, layer roles,
+   vocabulary, signature idiom), authored via the "Detect the profile" step above. Write this
+   first; the other docs use its vocabulary. The harness is framework-agnostic: it reasons in the
+   profile's universal axes, never in a framework name.
 2. `architecture.md` : intended module map, key boundaries, accepted tradeoffs, known risks.
 3. `boundaries.yaml` : intended allowed/forbidden dependencies, one block per module, using the
    schema in design section 10 (`path`, `responsibility`, `may_depend_on`, `must_not_depend_on`).
