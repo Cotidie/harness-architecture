@@ -11,9 +11,16 @@ The sample boundaries linter CLI keeps its `ast` scanner; this is the harness's
 observed source, not the dogfood's.
 """
 
-from typing import List, Optional, Sequence
+import os
+import re
+from typing import Dict, List, Optional, Sequence, Tuple
 
-from scripts.codegraph_index import ImportObservation, observed_import_edges
+from scripts.codegraph_index import (
+    ImportObservation,
+    SignatureNode,
+    observed_import_edges,
+    observed_signature_nodes,
+)
 
 from src.adapters.boundaries.python_import_scanner import ScanResult
 from src.contracts.boundaries.import_edge import ImportEdge
@@ -67,3 +74,38 @@ def scan_imports_from_index(
         parse_failures=[],
         matched_file_count=len(matched_sources),
     )
+
+
+_RECEIVER_WITH_ARGS = re.compile(r"^\(\s*(?:self|cls)\s*,\s*")
+_RECEIVER_ONLY = re.compile(r"^\(\s*(?:self|cls)\s*\)")
+
+
+def normalize_signature(sig: str) -> str:
+    """Whitespace-collapse and drop a leading self/cls receiver so a method and
+    a same-shape free function compare equal, and so the declared YAML need not
+    spell the receiver. Type strings are otherwise compared literally."""
+    s = " ".join(sig.split())
+    s = _RECEIVER_WITH_ARGS.sub("(", s)
+    s = _RECEIVER_ONLY.sub("()", s)
+    return s
+
+
+def observed_domain_from_index(
+    domain_dir: str,
+    nodes: Optional[Tuple[SignatureNode, ...]] = None,
+    db_path: str = ".codegraph/codegraph.db",
+) -> Dict[str, Dict[str, str]]:
+    """Map CodeGraph signature nodes under `domain_dir` to {class: {method: sig}}.
+    Methods only (qualified_name contains '::'); free functions are not seam."""
+    if nodes is None:
+        nodes = observed_signature_nodes(db_path)
+    prefix = os.path.normpath(domain_dir)
+    out = {}
+    for node in nodes:
+        if "::" not in node.qualified_name:
+            continue
+        if os.path.normpath(node.file_path).startswith(prefix + os.sep) or \
+                os.path.normpath(node.file_path) == prefix:
+            class_name, _, method = node.qualified_name.partition("::")
+            out.setdefault(class_name, {})[method] = normalize_signature(node.signature)
+    return out

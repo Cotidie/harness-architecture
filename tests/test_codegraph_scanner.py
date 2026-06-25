@@ -60,6 +60,36 @@ class CodegraphScannerTest(unittest.TestCase):
         self.assertEqual(result.edges, [])
         self.assertEqual(result.matched_file_count, 0)
 
+    def test_normalize_signature_strips_self_and_collapses_space(self):
+        from scripts.codegraph_scanner import normalize_signature
+        self.assertEqual(
+            normalize_signature("(self,  path: str)  -> Optional[str]"),
+            "(path: str) -> Optional[str]",
+        )
+        self.assertEqual(normalize_signature("(self)"), "()")
+        self.assertEqual(normalize_signature("(cls, x: int)"), "(x: int)")
+        # a free function with a leading non-receiver arg is untouched (besides spacing)
+        self.assertEqual(normalize_signature("(rules:  Iterable)"), "(rules: Iterable)")
+
+    def test_observed_domain_from_index_groups_methods_by_class(self):
+        from scripts.codegraph_index import SignatureNode
+        from scripts.codegraph_scanner import observed_domain_from_index
+        nodes = (
+            SignatureNode("Foo::bar", "bar", "method", "(self, x: int) -> int",
+                          "src/domain/foo.py", "python"),
+            SignatureNode("Foo::_hidden", "_hidden", "method", "(self)",
+                          "src/domain/foo.py", "python"),
+            SignatureNode("free_fn", "free_fn", "function", "(a: int)",
+                          "src/domain/foo.py", "python"),
+            SignatureNode("Other::baz", "baz", "method", "(self)",
+                          "src/adapters/other.py", "python"),
+        )
+        result = observed_domain_from_index("src/domain", nodes=nodes)
+        self.assertEqual(result, {"Foo": {"bar": "(x: int) -> int", "_hidden": "()"}})
+        # adapters file excluded by domain_dir; free function excluded (no "::")
+        self.assertNotIn("Other", result)
+        self.assertNotIn("free_fn", result.get("Foo", {}))
+
 
 if __name__ == "__main__":
     unittest.main()
