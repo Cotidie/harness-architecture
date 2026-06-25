@@ -70,34 +70,30 @@ Decide by a logged rule, not intuition:
 
 Run this whenever step 0's cadence fires (code-commit count over threshold, `--resurvey`, or
 `--drift-scan`). It is **feature-independent**: it checks the WHOLE repo, not the feature's area,
-to surface drift that accumulates outside any single feature. Three committed checks, no ad-hoc
+to surface drift that accumulates outside any single feature. ONE committed entrypoint, no ad-hoc
 python:
 
-1. Full linter self-check repo-wide: `python -m src.adapters.boundaries.cli src
-   .architecture/boundaries.yaml`; report any forbidden edge anywhere in `src/`.
-2. Module AND edge drift: `python -m scripts.drift_scan src .architecture/boundaries.yaml`. This
-   committed script reuses the linter's scanner to compute the observed module-edge graph and
-   diffs it against `.architecture/boundaries.yaml`: it flags **undeclared modules** (observed,
-   not declared) and **undeclared edges** (an observed module->module import in neither
-   `may_depend_on` nor `may_only_depend_on` of the source). It exits 1 when such drift exists, 0
-   when clean. Forbidden edges and unmaterialized declared modules are reported as info (the
-   linter owns the former; the latter is intended-ahead-of-observed, not drift).
-3. Intended-vs-observed signature drift: `python -m scripts.intended_diff src
-   .architecture/contracts.yaml .architecture/domain-model.yaml`. This committed script extracts
-   the observed contract fields and domain method signatures with `ast` and diffs them against the
-   structured intended layer (`contracts.yaml`, `domain-model.yaml`): it flags **missing classes**,
-   **field mismatches**, **undeclared contracts** (a contract class in code absent from the YAML),
-   and **domain signature mismatches**. A domain class observed but not curated is info, not drift.
-   It exits 1 on drift, 0 when ALIGNED.
+```
+python -m scripts.harness_check
+```
 
-None of these three needs a CodeGraph query: all are deterministic from source, so they are not
-metered. The structured intended layer this check reads (`contracts.yaml`, `domain-model.yaml`)
-is the definition layer; the prose `data-contracts.md` / `domain-model.md` now hold the intended
-rules only.
+`harness_check` reads the code root from `.architecture/profile.yaml` (`source_root`, so it is
+not tied to `src/`) and runs the three deterministic checks against it, then prints ONE combined
+report with one exit code:
 
-Write all three reports to `.architecture/validation/drift-scan.md` (date, trigger, plus each
-script's output) and surface them. Report only; resolving drift is a human/Architect decision,
-never automatic.
+1. **boundaries linter** (forbidden-edge self-check repo-wide);
+2. **drift_scan** (undeclared modules AND undeclared cross-module edges vs `boundaries.yaml`);
+3. **intended_diff** (missing classes, field mismatches, undeclared contracts, domain signature
+   mismatches vs `contracts.yaml` / `domain-model.yaml`).
+
+Exit code: `0` all clean, `1` any drift, `2` could-not-run (e.g. no profile / no `source_root`).
+None of the three needs a CodeGraph query, so this surface is deterministic and **unmetered**. The
+structured intended layer it reads (`contracts.yaml`, `domain-model.yaml`) is the definition layer;
+the prose `data-contracts.md` / `domain-model.md` hold the intended rules only.
+
+Write `harness_check`'s combined report to `.architecture/validation/drift-scan.md` (date, trigger,
+plus the output) and surface it. Report only; resolving drift is a human/Architect decision, never
+automatic.
 
 ### Step 1: Architect -> patch
 
