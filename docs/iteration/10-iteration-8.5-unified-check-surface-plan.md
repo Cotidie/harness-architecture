@@ -95,3 +95,30 @@
 
 - **Do not over-abstract.** The three checks share a shape but take different intended inputs; the shared layer must stay path resolution + aggregation only, not a premature common-report framework. If the linter wrapper grows, that is a signal it should become a real `compute_*` in the linter adapter, not bloat in `harness_check`.
 - **`source_root` is a single path.** Repos with multiple source roots (e.g. a monorepo) are out of scope here; revisit at packaging if a real case appears.
+
+---
+
+## Results (executed 2026-06-25)
+
+Built Tasks 1-5: `source_root` in `profile.yaml`, the committed `scripts/harness_paths.py` resolver (+ 3 tests), the `scripts/harness_check.py` aggregator (+ 6 tests), and the one-line step-0b change. 107 tests OK (was 98, +9).
+
+**Outcome: iteration shipped.**
+
+- **One command, one report.** `python -m scripts.harness_check` on the self-host prints a single combined report (boundaries + drift_scan + intended_diff) and exits 0. `harness-feature` step 0b now calls just this, not three commands.
+- **Profile-driven, not `src/`-bound.** The resolver reads `source_root` from `profile.yaml`; a test with `source_root: app` and an `app/` layout runs the checks against `app/` and is clean. The `src/` hardcoding is gone.
+- **Aggregate exit contract holds.** Planted forbidden edge (scratch in `src/domain/`) -> `boundaries=drift`, aggregate exit 1, with file:line; reverted -> exit 0. A contract field mismatch -> `intended_diff=drift`, exit 1 (unit test).
+- **Thin aggregator.** The three sub-checks are unchanged and still independently runnable/tested; `harness_check` only resolves paths, invokes, and combines, plus a small linter wrapper that adapts the CLI to a `(clean, report)` result.
+
+### Adversarial pass (cli-user-test style)
+
+- no profile -> `profile: ERROR`, exit 2;
+- profile without `source_root` -> exit 2;
+- `source_root` pointing at a missing dir -> `boundaries: ERROR` (scanner cannot run), exit 2;
+- malformed profile YAML -> exit 2.
+
+All clean could-not-run, no traceback.
+
+### Findings
+
+1. **The checks match `boundaries.yaml` globs against RELATIVE paths.** The linter/`drift_scan` resolve a file's module by longest glob-prefix (`src/domain/**`), which only matches when paths are repo-root-relative. So `harness_check` chdir's to the repo root and resolves paths relative to it (resolver joins are `normpath`-ed to strip `./`). This path-matching convention is a coupling to remember when iter 9 swaps the observed source to the CodeGraph index: the index will report its own path form, so the glob-matching layer may need to normalize against it.
+2. **`source_root` is single-valued.** Fine for self-host and most repos; a monorepo with multiple roots is deferred to packaging.
