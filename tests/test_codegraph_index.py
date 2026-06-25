@@ -98,6 +98,7 @@ class CodegraphIndexTest(unittest.TestCase):
         self.assertTrue(n.file_path.endswith("boundary_rule_set.py"))
         self.assertEqual(n.language, "python")
 
+    @unittest.skipUnless(os.path.isfile(REAL_DB), "no real .codegraph index")
     def test_observed_signature_nodes_schema_guard(self):
         import scripts.codegraph_index as ci
         saved = ci.EXPECTED_SCHEMA
