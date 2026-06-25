@@ -8,6 +8,7 @@ last_codegraph_query_scope:
   - "src/ (boundaries linter, iteration 3)"
   - "src/ boundaries seam (may_only_depend_on rule, iteration 4)"
   - "src/ boundaries CLI/reporter seam (--format json, format-json patch)"
+  - "src/ boundaries CLI seam (--quiet flag, quiet-flag patch, iteration 6)"
 notes:
   - "State is metadata only. CodeGraph is source of truth for observed architecture."
   - "Architecture docs are intended architecture, not a full code index."
@@ -20,4 +21,9 @@ notes:
   - "state bump. Approval is unforgeable (human turn). Orchestrator runs gate 1 itself; the"
   - "Inspector does gate 2 + verdict. Architect grounds seam signatures in CodeGraph."
   - "first feature shipped via the orchestrated loop: --format json (format-json patch)."
-</content>
+  - "Iteration 6: governance + budget hardening. Inspector trimmed to gate 2 + verdict +"
+  - "Next-action ONLY (no gate-1 re-run, no state bump). Orchestrator verifies freshness"
+  - "(codegraph status --json clean) before each query, runs a capped REJECT->revise loop"
+  - "(max 2 cycles, re-approval preserved), and a full-graph drift scan on the cadence."
+  - "Budget metering hook committed but inactive this session (needs full restart); ran on"
+  - "self-report+cross-check fallback. --quiet flag shipped (quiet-flag patch) via the loop."

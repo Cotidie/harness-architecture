@@ -179,6 +179,27 @@ The Architect classifies drift only for the feature's area, so harmful drift els
 
 ## Risks / open decisions
 
-- **Hook reach into subagents (primary risk).** Validated in Task 4 Step 1; the fallback is specified so the iteration ships either way.
+- **Hook reach into subagents (primary risk).** NOT validated this session: the settings hook never activated (see Results finding 1), so the fallback shipped the iteration. Re-test after a full session restart; this is a hard gate for packaging.
 - **Drift-scan signal-to-noise.** The "undeclared module/edge" check may be noisy on a repo whose `boundaries.yaml` is intentionally coarse. Keep it a surfaced report, never an auto-block, this iteration.
 - **Capped-loop value.** Two cycles is a guess; the dogfood + feedback decide whether to keep, raise, or drop automatic revision in favor of always-ask-human.
+
+---
+
+## Results (executed 2026-06-25)
+
+Built Tasks 1-5 (Inspector trim, freshness verification, capped revise loop, budget-meter hook, drift scan), then dogfooded the hardened loop on `--quiet`.
+
+**Loop outcome: ACCEPT.** Feature shipped at `7e65907`; harness state trails at `4e033a8`. 76 tests OK.
+
+- **Freshness verification:** `codegraph sync` + `status --json` returned FRESH (pendingChanges all 0, worktreeMismatch null) before the Architect and before the Inspector. Cheap, ran clean both times.
+- **Inspector cleanup (finding-2 fix):** the Inspector made 1 query, did gate 2 + verdict + `## Next action: none`, and did NOT run gate 1 or touch `state.yaml` (`git diff` on state was empty after its run). The orchestrator ran gate 1 itself (76 tests, self-check exit 0, scope = 2 allowed files) and owned the state bump.
+- **Capped revise loop:** a forced scratch forbidden edge made the orchestrator's gate 1 exit 1 -> `REJECT: ARCHITECTURE VIOLATION` -> routed to builder (code-level, same patch), no Inspector dispatch, no commit (HEAD unchanged). The full 2-cycle cap is deterministic skill routing, verified by inspection rather than by burning multiple agent cycles.
+- **Drift scan:** `--drift-scan` ran the repo-wide self-check (clean, exit 0) and the undeclared-module diff (none; `shared` is declared-but-not-materialized, intended-ahead-of-observed, not drift), wrote `.architecture/validation/drift-scan.md`.
+- **Feature:** `--quiet` clean run prints nothing (exit 0); default + violations + could-not-run paths unchanged.
+
+### Findings
+
+1. **Budget hook did not activate this session (primary risk realized, fallback used).** After `/reload-plugins`, the metered counter stayed 0 even for a MAIN-SESSION `codegraph_explore`, so the project `.claude/settings.json` `PreToolUse` hook was not live (Claude Code appears to gate newly-added settings hooks behind a full session restart and/or explicit hook approval; `/reload-plugins` reloads plugin hooks, not this one). Consequence: the subagent-reach question (the actual primary risk) stayed UNTESTED, and metering ran on the documented Task-4 Step-7 fallback (each agent's self-reported `QUERIES_USED`, cross-checked against artifacts: architect=1, builder=0, inspector=1, all within budget). The hook files are committed and unit-tested standalone (counts explore, ignores Read); confirming live activation + subagent reach is the first thing to retry after a full restart, and is a hard gate for the packaging iteration.
+2. **Builder needs no CodeGraph query for a lite patch.** `QUERIES_USED=0` for the Builder on `--quiet`; the per-agent budget is an upper bound (<= 1), not a floor. The meter should not flag 0 as anomalous.
+
+The core hardening behaved correctly: freshness-gated, orchestrator-owned gate 1 + state, Inspector reduced to judgment, capped routing on REJECT, repo-wide drift surfaced. The one gap is live hook enforcement, which is environmental (session restart) rather than a design failure, and the fallback kept metering honest in the meantime.
