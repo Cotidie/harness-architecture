@@ -121,6 +121,26 @@ class HarnessCheckTest(unittest.TestCase):
             results = compute_results(root)
         self.assertEqual(aggregate_exit(results), 2, results)
 
+    def test_only_runs_just_the_named_check(self):
+        # gate 1 uses `--only boundaries`: a contract mismatch (intended_diff
+        # drift) must NOT make a boundaries-only run report drift.
+        bad_contracts = textwrap.dedent(
+            """\
+            contracts:
+              - name: Dto
+                layer: contracts
+                module: src/contracts/dto.py
+                crosses: "x"
+                fields:
+                  value: str
+            """
+        )
+        overrides = {".architecture/contracts.yaml": bad_contracts}
+        with _tree(_harness_files(overrides=overrides)) as root:
+            results = compute_results(root, only={"boundaries"})
+        self.assertEqual([r.name for r in results], ["boundaries"])
+        self.assertEqual(aggregate_exit(results), 0, results)
+
     def test_profile_driven_non_src_layout(self):
         # source_root = app, not src: the checks must target app/ and be clean.
         with _tree(_harness_files(layer="app")) as root:

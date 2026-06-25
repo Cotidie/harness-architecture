@@ -16,10 +16,11 @@ wrapper that adapts the boundaries linter to a (clean, report) result without
 the CLI's print/exit.
 """
 
+import argparse
 import os
 import sys
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Set, Tuple
 
 import yaml
 
@@ -81,7 +82,12 @@ def _check(name: str, run) -> CheckResult:
     return CheckResult(name, status, report_text)
 
 
-def compute_results(repo_root: str = ".") -> List[CheckResult]:
+CHECK_NAMES = ("boundaries", "drift_scan", "intended_diff")
+
+
+def compute_results(
+    repo_root: str = ".", only: Optional[Set[str]] = None
+) -> List[CheckResult]:
     # Resolve once; a profile/path failure means no check can run.
     prev = os.getcwd()
     abs_root = os.path.abspath(repo_root)
@@ -106,11 +112,14 @@ def compute_results(repo_root: str = ".") -> List[CheckResult]:
             )
             return ("drift" if report.has_drift else "clean"), format_diff(report)
 
-        return [
-            _check("boundaries", _linter),
-            _check("drift_scan", _drift),
-            _check("intended_diff", _intended),
+        checks = [
+            ("boundaries", _linter),
+            ("drift_scan", _drift),
+            ("intended_diff", _intended),
         ]
+        if only is not None:
+            checks = [(name, run) for name, run in checks if name in only]
+        return [_check(name, run) for name, run in checks]
     finally:
         os.chdir(prev)
 
@@ -141,8 +150,25 @@ def format_report(results: List[CheckResult]) -> str:
 
 
 def main(argv: List[str]) -> int:
-    repo_root = argv[0] if argv else "."
-    results = compute_results(repo_root)
+    parser = argparse.ArgumentParser(prog="python -m scripts.harness_check")
+    parser.add_argument("repo_root", nargs="?", default=".")
+    parser.add_argument(
+        "--only",
+        default=None,
+        help="comma-separated subset of checks: %s" % ",".join(CHECK_NAMES),
+    )
+    args = parser.parse_args(argv)
+    only = None
+    if args.only:
+        only = {part.strip() for part in args.only.split(",") if part.strip()}
+        unknown = only - set(CHECK_NAMES)
+        if unknown:
+            sys.stderr.write(
+                "unknown check(s): %s (known: %s)\n"
+                % (", ".join(sorted(unknown)), ", ".join(CHECK_NAMES))
+            )
+            return 2
+    results = compute_results(args.repo_root, only=only)
     print(format_report(results))
     return aggregate_exit(results)
 
