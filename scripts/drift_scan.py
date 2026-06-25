@@ -56,7 +56,12 @@ def _glob_prefix(path_glob: str) -> str:
     return prefix.rstrip("/")
 
 
-def compute_drift(target_dir: str, boundaries_file: str) -> DriftReport:
+def compute_drift(
+    target_dir: str, boundaries_file: str, scan_imports_fn=scan_imports
+) -> DriftReport:
+    # `scan_imports_fn(target_dir, rule_set) -> ScanResult` is the observed-edge
+    # seam. The default is the Python-`ast` scanner; the harness injects the
+    # CodeGraph-backed scanner (polyglot) here.
     module_rules = load_module_rules(boundaries_file)
     rule_set = LintBoundaries().build_rule_set(module_rules)
 
@@ -99,7 +104,7 @@ def compute_drift(target_dir: str, boundaries_file: str) -> DriftReport:
     ]
 
     # Observed module -> module edges (self-edges ignored).
-    scan = scan_imports(target_dir, rule_set)
+    scan = scan_imports_fn(target_dir, rule_set)
     observed_edges: Set[Tuple[str, str]] = {
         (edge.source_module, edge.imported_module)
         for edge in scan.edges

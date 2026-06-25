@@ -5,8 +5,13 @@ import textwrap
 import unittest
 
 from scripts.harness_check import aggregate_exit, compute_results
+from src.adapters.boundaries.python_import_scanner import scan_imports
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Temp trees are not CodeGraph-indexed, so the aggregation-logic tests inject the
+# `ast` scanner. The CodeGraph-backed path is covered by test_real_repo_all_clean
+# and tests/test_codegraph_scanner.py.
 
 
 @contextlib.contextmanager
@@ -85,13 +90,13 @@ class HarnessCheckTest(unittest.TestCase):
 
     def test_clean_temp_tree_exit_0(self):
         with _tree(_harness_files()) as root:
-            results = compute_results(root)
+            results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 0, results)
 
     def test_forbidden_edge_makes_linter_drift(self):
         overrides = {"src/domain/core.py": "import src.adapters.io\n"}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root)
+            results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 1, results)
         linter = _by_name(results, "boundaries")
         self.assertEqual(linter.status, "drift")
@@ -111,14 +116,14 @@ class HarnessCheckTest(unittest.TestCase):
         )
         overrides = {".architecture/contracts.yaml": bad_contracts}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root)
+            results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 1, results)
         diff = _by_name(results, "intended_diff")
         self.assertEqual(diff.status, "drift")
 
     def test_missing_profile_is_could_not_run_exit_2(self):
         with _tree({"README.md": "# no profile\n"}) as root:
-            results = compute_results(root)
+            results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 2, results)
 
     def test_only_runs_just_the_named_check(self):
@@ -137,14 +142,14 @@ class HarnessCheckTest(unittest.TestCase):
         )
         overrides = {".architecture/contracts.yaml": bad_contracts}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root, only={"boundaries"})
+            results = compute_results(root, only={"boundaries"}, scan_fn=scan_imports)
         self.assertEqual([r.name for r in results], ["boundaries"])
         self.assertEqual(aggregate_exit(results), 0, results)
 
     def test_profile_driven_non_src_layout(self):
         # source_root = app, not src: the checks must target app/ and be clean.
         with _tree(_harness_files(layer="app")) as root:
-            results = compute_results(root)
+            results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 0, results)
         self.assertTrue(all(r.status == "clean" for r in results), results)
 

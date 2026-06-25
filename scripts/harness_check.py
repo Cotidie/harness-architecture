@@ -24,6 +24,8 @@ from typing import List, Optional, Set, Tuple
 
 import yaml
 
+from scripts.codegraph_index import CodegraphIndexError
+from scripts.codegraph_scanner import scan_imports_from_index
 from scripts.drift_scan import compute_drift
 from scripts.drift_scan import format_report as format_drift
 from scripts.harness_paths import HarnessPathsError, Paths, resolve_paths
@@ -34,13 +36,13 @@ from src.adapters.boundaries.boundaries_config_loader import (
     BoundariesConfigError,
     load_module_rules,
 )
-from src.adapters.boundaries.python_import_scanner import scan_imports
 from src.adapters.boundaries.violation_reporter import format_report as format_violations
 from src.application.boundaries.lint_boundaries import LintBoundaries
 
 # Per-check could-not-run errors that map to an `error` status, never a crash.
 _COULD_NOT_RUN = (
     HarnessPathsError,
+    CodegraphIndexError,
     BoundariesConfigError,
     FileNotFoundError,
     NotADirectoryError,
@@ -50,6 +52,14 @@ _COULD_NOT_RUN = (
 )
 
 
+def _codegraph_scan(_target_dir, rule_set):
+    """The harness's observed-edge source: CodeGraph index, not Python `ast`.
+    Signature matches the ast `scan_imports(target_dir, rule_set)` seam so it
+    drops into `_run_linter` and `compute_drift`; the target dir is unused
+    because the index already covers the whole repo (the rule globs scope it)."""
+    return scan_imports_from_index(rule_set)
+
+
 @dataclass(frozen=True)
 class CheckResult:
     name: str
@@ -57,17 +67,19 @@ class CheckResult:
     report_text: str
 
 
-def _run_linter(source_dir: str, boundaries: str) -> Tuple[bool, str]:
+def _run_linter(source_dir: str, boundaries: str, scan_fn=_codegraph_scan) -> Tuple[bool, str]:
     """Run the boundaries linter without the CLI's print/exit; return
-    (clean, report_text). Raises a could-not-run error on a bad tree."""
+    (clean, report_text). The observed edges come from `scan_fn` (the CodeGraph
+    scanner by default, so the harness's boundary check is polyglot). Raises a
+    could-not-run error on a bad tree or a missing/stale index."""
     module_rules = load_module_rules(boundaries)
     use_case = LintBoundaries()
     rule_set = use_case.build_rule_set(module_rules)
-    scan = scan_imports(source_dir, rule_set)
+    scan = scan_fn(source_dir, rule_set)
     if scan.matched_file_count == 0:
         raise BoundariesConfigError(
-            "no Python files under %r matched any module path glob; "
-            "nothing was checked" % (source_dir,)
+            "no files under %r matched any module path glob; nothing was checked"
+            % (source_dir,)
         )
     violations = use_case.run(module_rules, scan.edges, scan.parse_failures)
     return (not violations), format_violations(violations)
@@ -86,8 +98,12 @@ CHECK_NAMES = ("boundaries", "drift_scan", "intended_diff")
 
 
 def compute_results(
-    repo_root: str = ".", only: Optional[Set[str]] = None
+    repo_root: str = ".", only: Optional[Set[str]] = None, scan_fn=_codegraph_scan
 ) -> List[CheckResult]:
+    # `scan_fn(target_dir, rule_set) -> ScanResult` is the observed-edge source.
+    # Default is the CodeGraph scanner (polyglot, production). Tests of the
+    # aggregation logic inject the `ast` scanner so they can run on un-indexed
+    # temp trees.
     # Resolve once; a profile/path failure means no check can run.
     prev = os.getcwd()
     abs_root = os.path.abspath(repo_root)
@@ -99,11 +115,13 @@ def compute_results(
             return [CheckResult("profile", "error", "could not run: %s" % (exc,))]
 
         def _linter():
-            clean, text = _run_linter(paths.source_dir, paths.boundaries)
+            clean, text = _run_linter(paths.source_dir, paths.boundaries, scan_fn=scan_fn)
             return ("clean" if clean else "drift"), text
 
         def _drift():
-            report = compute_drift(paths.source_dir, paths.boundaries)
+            report = compute_drift(
+                paths.source_dir, paths.boundaries, scan_imports_fn=scan_fn
+            )
             return ("drift" if report.has_drift else "clean"), format_drift(report)
 
         def _intended():
