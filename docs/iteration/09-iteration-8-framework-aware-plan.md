@@ -108,3 +108,29 @@ Mirror the committed-script pattern: a `compute_profile_seed(target_dir, source_
 - **Detection is necessarily shallow.** `detect_profile` guesses framework from libs and proposes layer names; it cannot know role mappings. That is by design (detect-then-confirm), but it means a wrong human confirmation still shapes everything. The profile is a reviewable artifact precisely so that mistake is visible in a PR.
 - **`python-ddd` is still the only fully-exercised profile.** The fixture proves detection generalizes; the agents reading the profile is proven by inspection + the profile-swap argument, not by a second end-to-end loop. Honest gap, recorded.
 - **Universal-vs-profile split is a judgment call.** Some rules (no raw payload across a boundary) are clearly universal; others may be more DDD-shaped than they look. If a principle turns out framework-specific when a real second framework lands, move its noun into the profile then.
+
+---
+
+## Results (executed 2026-06-25)
+
+Built Tasks 1-5: `.architecture/profile.yaml` (self-host `python-ddd`), the committed `scripts/detect_profile.py` (+ 6 unit tests), de-hardcoded `architect.md` + `surveyor.md`, and the layout-only `examples/flask-mini/` fixture (+ proof test). 98 tests OK (was 91, +7).
+
+**Outcome: iteration shipped.**
+
+- **Detection generalizes (headline proof).** `detect_profile` on `examples/flask-mini/` reports `framework_guess == "python/flask"` and `candidate_layers == (blueprints, models, services)`, and explicitly NOT `domain/contracts/adapters`. The ontology now comes from the repo, not from baked prose.
+- **Honest on the self-host.** `python -m scripts.detect_profile . src` reports `python/unknown` (no web-framework lib in `requirements.txt`) and the four `src/` layers, leaving the role mapping blank for the human. Detect-then-confirm, not silent-auto.
+- **Ontology de-hardcoded.** `architect.md` now states the universal principles (no raw payload across a boundary; behavior is a named unit) and reads the NOUNS (`vocabulary.boundary_shape`, `vocabulary.behavior_unit`) and layers (`roles.*`) from `profile.yaml`. The DDD specifics are the `python-ddd` profile's values, not law. `surveyor.md` runs `detect_profile` as a seed, writes/confirms `profile.yaml` (now its first of ten outputs), and uses the profile's vocabulary. Two stale iter-7 pointers fixed (read the YAML definition layer; idiom pointer now points at iter 8/9).
+
+### Adversarial pass (cli-user-test style on detect_profile)
+
+- no args -> usage on stderr, exit 2;
+- empty dir -> `unknown`/`unknown`, exit 0 (advisory tool, no drift exit code);
+- nonexistent `source_dir` -> framework still guessed from the manifest, candidate layers empty, no crash;
+- manifest with no known lib -> `python/unknown`;
+- only non-code dirs -> `unknown`, `(none detected)` layers.
+
+### Findings / remaining gaps
+
+1. **`python-ddd` is still the only fully-exercised profile.** The fixture proves the DETECTION layer generalizes and the prompts now read the profile (verified by inspection: the nouns resolve from `profile.yaml`). What is NOT proven this slice is an end-to-end Surveyor->Architect->Builder loop on a real other-framework repo, because that needs a CodeGraph-indexed second app. Recorded as a packaging-time (iter 10) / follow-up validation, consistent with the plan.
+2. **Detection is intentionally shallow on roles.** `detect_profile` names the framework from manifest libs and lists candidate layers but never maps layers to roles, by design (a built-in role heuristic would re-bake an ontology). The role mapping is a human confirm, so a wrong confirmation still shapes downstream work; the profile is a reviewable PR artifact precisely to surface that.
+3. **Signature idiom recorded, not yet normalized.** `profile.yaml.signature_idiom` captures the Python form; the iter-7 literal-type-string brittleness (`Tuple` vs `tuple`) is unchanged and still deferred to iteration 9's semantic comparison.
