@@ -33,5 +33,5 @@ domain_classes:
       - Path matching is most-specific-wins (longest glob prefix).
     methods:
       from_rules: '(rules: Iterable[Mapping[str, object]]) -> "BoundaryRuleSet"'
-      module_for_path: "(self, path: str) -> Optional[str]"
-      check: "(self, source_module: Optional[str], target_module: Optional[str], file_path: str, line: int, ) -> List[BoundaryDecision]"
+      module_for_path: "(path: str) -> Optional[str]"
+      check: "(source_module: Optional[str], target_module: Optional[str], file_path: str, line: int, ) -> List[BoundaryDecision]"
