@@ -1,8 +1,8 @@
-last_reconciled_commit: "bbf88f766c45ded17ccdb5c90fe75517994cc200"
-last_validated_commit: "bbf88f766c45ded17ccdb5c90fe75517994cc200"
-last_validation_time: "2026-06-25T08:42:34Z"
-last_reconciliation_decision: "ALIGNED (--format json CLI output, format-json patch, iteration 5)"
-last_validation_decision: "ACCEPT (--format json CLI output, format-json patch)"
+last_reconciled_commit: "7e65907c9882140272a3dd33105f5f2469b20a7c"
+last_validated_commit: "7e65907c9882140272a3dd33105f5f2469b20a7c"
+last_validation_time: "2026-06-25T09:19:21Z"
+last_reconciliation_decision: "ALIGNED (--quiet flag, quiet-flag patch, iteration 6)"
+last_validation_decision: "ACCEPT (--quiet flag, quiet-flag patch, iteration 6)"
 last_codegraph_query_scope:
   - "sample/ (fixture)"
   - "src/ (boundaries linter, iteration 3)"
