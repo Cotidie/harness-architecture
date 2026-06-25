@@ -78,6 +78,7 @@ generalization lands only in 4+ slices.
 | 6 | Governance + budget hardening (light) | The governance teeth iter 5 deferred (freshness verification, capped REJECT->revise loop, Inspector stops self-bumping/gate-1) + token-budget enforcement + forbidden-behavior guards. |
 | 7 | Structured intended-architecture layer (light) | Convert the intended layer from prose to structured data (`contracts.yaml`, `domain-model.yaml` alongside `boundaries.yaml`); reconciliation and gate 2 become a mechanical diff of structured-intended vs CodeGraph-observed, not prose judgment. |
 | 8 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
+| 8.5 | Unified, profile-driven check surface (light) | Consolidate the accreting committed checks (boundaries linter, drift_scan, intended_diff) behind ONE `harness check` entrypoint that reads paths from `profile.yaml` instead of hardcoding `src/`: one combined report, one exit code, any repo layout. |
 | 9 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
 | 10 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
@@ -465,12 +466,64 @@ generalization lands only in 4+ slices.
   feedback. Enforcement (running the linter) on non-Python repos is explicitly OUT — that is
   iteration 9.
 
+## Iteration 8.5: Unified, profile-driven check surface *(light, added 2026-06-25 from iter-8 retro)*
+
+- **Goal:** Make the harness's own deterministic checks coherent before the expensive polyglot
+  and packaging slices. Consolidate the accreting committed checks behind one entrypoint, and
+  stop hardcoding `src/` by reading paths from the iteration-8 profile.
+- **User-facing value:** One command (`harness check`) runs every deterministic check against the
+  paths the profile declares, and returns one combined report + one exit code. It works on any
+  repo layout, not only this self-host's `src/`.
+- **Why now (from the iter-8 retro, 2026-06-25):** iterations 6-8 each produced a same-shaped
+  committed check (the boundaries linter, `scripts/drift_scan.py`, `scripts/intended_diff.py`,
+  `scripts/detect_profile.py`) with **no shared contract**, and the drift/diff checks **hardcode
+  `src/`** and fixed `.architecture/*.yaml` paths. That is drift in the harness's OWN tooling
+  (ironic for a tool that polices layering) and a hard packaging blocker: a user installing the
+  plugin into another repo will not memorize four script invocations against the wrong source
+  root. This slice is cheap and unblocks both iteration 9 (the consolidation gives the
+  CodeGraph-index adapter one place to land) and iteration 10 (packaging ships the one command).
+- **Features introduced (sketch):**
+  - **B) Profile-driven paths.** A small shared resolver reads the source root and layer paths
+    from `.architecture/profile.yaml` (roles -> layers) and `boundaries.yaml`, so every check
+    targets the project's real layout instead of a literal `src/`. The existing checks stop
+    taking a hardcoded `src` argument and ask the resolver.
+  - **C) One entrypoint.** `scripts/harness_check.py` (and/or a `harness-check` skill) runs the
+    boundaries linter, `drift_scan`, and `intended_diff`, aggregates them into ONE report, and
+    returns `0` (all clean) / `1` (drift found) / `2` (could-not-run). `harness-feature` step 0b
+    calls this single entrypoint instead of three separate commands.
+  - **Thin shared report contract.** The checks already nearly share a shape (frozen report
+    dataclass + `format_report` + exit code); factor out only the common path-resolution and
+    report-aggregation, so a future check (the mechanical gate 2 in iter 9) plugs in uniformly.
+- **Testable conditions (sketch):** `harness check` on the self-host is all-clean exit 0; a
+  planted forbidden edge or contract mismatch makes the right sub-check report it with aggregate
+  exit 1; the checks resolve their paths from the profile (proven by running against a non-`src`
+  layout, not just the self-host).
+- **Risks / open decisions:** do NOT over-abstract. The three checks share a shape but take
+  different intended inputs (`boundaries.yaml` vs `contracts.yaml` + `domain-model.yaml`); the
+  shared layer must stay thin (path resolution + aggregation), not a premature framework. Whether
+  the entrypoint is a Python script, a skill, or both is decided when detailing (packaging leans
+  toward a skill wrapping the script).
+- **Out of scope:** the CodeGraph-index observed adapter (iteration 9); product/dogfood split and
+  packaging (iteration 10).
+
 ## Iteration 9 — Polyglot enforcement *(light — added 2026-06-25 from feedback)*
 
 - **Goal:** Make the *enforcement* gate language-agnostic. Iteration 8 lets the harness
   describe a non-Python repo; iteration 9 lets it actually *check* one.
 - **User-facing value:** The validation gate (iter 4) runs on a TypeScript or Java repo and
   reports boundary violations there, so the whole loop — not just the docs — works off Python.
+- **Reframe (from iter-8 retro, 2026-06-25): "one observed source", not just "polyglot".** The
+  highest-leverage version of this iteration is not "add per-language parsers" but **replace the
+  three Python-`ast` observed-extractors (the boundary scanner, `intended_diff`, `drift_scan`)
+  with a single CodeGraph-index-backed observed adapter** that all checks read through. That one
+  move delivers four things at once: polyglot (CodeGraph is multi-language), de-duplication (kill
+  three walkers), the **mechanical gate 2** (promote `intended_diff` to a deterministic signature
+  gate and retire the LLM-judged gate 2), and **type normalization** (the index carries resolved
+  types, fixing the iter-7 `Tuple` vs `tuple` brittleness). Iteration 8.5 gives this one place to
+  land: the observed adapter slots behind the unified `harness check` surface, so the checks'
+  public contract does not change, only their observed source. **Gate this on a feasibility spike
+  FIRST:** confirm a stable read path into `.codegraph/` exists (a CLI/export, not raw
+  undocumented SQLite); if none is stable, fall back to option B below for the languages needed.
 - **Why separate from iter 8:** the current scanner is Python-`ast`-only
   (`src/adapters/boundaries/python_import_scanner.py`); supporting TS/Java imports is a real
   parser/data-source lift, the most expensive piece of generalization. Sequenced after the
@@ -508,6 +561,17 @@ generalization lands only in 4+ slices.
 - **Packaging decision (locked): Claude Code plugin.** The system is entirely Claude Code
   artifacts (self-contained agent defs + a setup skill + the `/.architecture` scaffold), so it
   ships as a plugin in a marketplace rather than a binary or template repo.
+- **Prerequisite (from iter-8 retro, 2026-06-25): split PRODUCT from DOGFOOD first.** This repo
+  currently conflates three things: the harness PRODUCT (`.claude/` agents + skills, the `scripts/`
+  check tools, the `.architecture/` scaffold template), the DOGFOOD feature (`src/` boundaries
+  linter), and governance docs that describe the dogfood. Packaging cannot be clean until "what
+  ships in the plugin" is cleanly separated from "what is just the example we proved it on". The
+  `src/` linter does NOT ship; the `scripts/` check tools (unified in iter 8.5) DO. Make this
+  boundary explicit before bundling.
+- **Also fold in here: the no-human-approval contract (iter-6 open item #7).** An autonomous
+  `/harness-feature` (loop/cron) has no human turn and would deadlock at the approval pause. Decide
+  the explicit non-interactive contract here (`--auto-approve` with a recorded rationale, or a
+  documented human-required constraint), since autonomous install/run is in this iteration's scope.
 - **Likely shape (re-planned from what iters 1–9 prove must ship):**
   - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector), the
     `/harness-feature` orchestrator skill (iter 5), and a `harness-init` setup skill.
