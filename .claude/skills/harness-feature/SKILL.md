@@ -70,7 +70,7 @@ Decide by a logged rule, not intuition:
 
 Run this whenever step 0's cadence fires (code-commit count over threshold, `--resurvey`, or
 `--drift-scan`). It is **feature-independent**: it checks the WHOLE repo, not the feature's area,
-to surface drift that accumulates outside any single feature. Two committed checks, no ad-hoc
+to surface drift that accumulates outside any single feature. Three committed checks, no ad-hoc
 python:
 
 1. Full linter self-check repo-wide: `python -m src.adapters.boundaries.cli src
@@ -81,19 +81,34 @@ python:
    not declared) and **undeclared edges** (an observed module->module import in neither
    `may_depend_on` nor `may_only_depend_on` of the source). It exits 1 when such drift exists, 0
    when clean. Forbidden edges and unmaterialized declared modules are reported as info (the
-   linter owns the former; the latter is intended-ahead-of-observed, not drift). No CodeGraph
-   query is needed: the scan is deterministic from source, so it is not metered.
+   linter owns the former; the latter is intended-ahead-of-observed, not drift).
+3. Intended-vs-observed signature drift: `python -m scripts.intended_diff src
+   .architecture/contracts.yaml .architecture/domain-model.yaml`. This committed script extracts
+   the observed contract fields and domain method signatures with `ast` and diffs them against the
+   structured intended layer (`contracts.yaml`, `domain-model.yaml`): it flags **missing classes**,
+   **field mismatches**, **undeclared contracts** (a contract class in code absent from the YAML),
+   and **domain signature mismatches**. A domain class observed but not curated is info, not drift.
+   It exits 1 on drift, 0 when ALIGNED.
 
-Write the script's report to `.architecture/validation/drift-scan.md` (date, trigger, plus the
-script output) and surface it. Report only; resolving drift is a human/Architect decision, never
-automatic.
+None of these three needs a CodeGraph query: all are deterministic from source, so they are not
+metered. The structured intended layer this check reads (`contracts.yaml`, `domain-model.yaml`)
+is the definition layer; the prose `data-contracts.md` / `domain-model.md` now hold the intended
+rules only.
+
+Write all three reports to `.architecture/validation/drift-scan.md` (date, trigger, plus each
+script's output) and surface them. Report only; resolving drift is a human/Architect decision,
+never automatic.
 
 ### Step 1: Architect -> patch
 
 Before dispatching, run the **freshness check** (see controls) and read the metered query-count.
-Dispatch the `architect` subagent with the feature request and the `.architecture/` docs. After
-it returns, read the counter again: the delta is the Architect's metered query count (require
-<= 1). Capture: the patch path, the reconciliation label, and the metered query count.
+Dispatch the `architect` subagent with the feature request and the `.architecture/` docs. The
+intended contract/domain **definitions** are structured data in `contracts.yaml` /
+`domain-model.yaml` (reconciliation reads them as data, e.g. via `scripts/intended_diff`); the
+prose `data-contracts.md` / `domain-model.md` hold the intended **rules**. (The Architect's patch
+sections 7-8 emitting structured diffs to these files is a deferred follow-up.) After it returns,
+read the counter again: the delta is the Architect's metered query count (require <= 1). Capture:
+the patch path, the reconciliation label, and the metered query count.
 
 ### Step 2: APPROVAL PAUSE (unforgeable)
 
