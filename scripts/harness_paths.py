@@ -43,8 +43,8 @@ def resolve_paths(repo_root: str = ".", arch_dir: str = ".architecture") -> Path
             "target, relative to the repo root)" % (profile_path,)
         )
     return Paths(
-        source_dir=os.path.join(repo_root, source_root),
-        boundaries=os.path.join(arch, "boundaries.yaml"),
-        contracts=os.path.join(arch, "contracts.yaml"),
-        domain_model=os.path.join(arch, "domain-model.yaml"),
+        source_dir=os.path.normpath(os.path.join(repo_root, source_root)),
+        boundaries=os.path.normpath(os.path.join(arch, "boundaries.yaml")),
+        contracts=os.path.normpath(os.path.join(arch, "contracts.yaml")),
+        domain_model=os.path.normpath(os.path.join(arch, "domain-model.yaml")),
     )
