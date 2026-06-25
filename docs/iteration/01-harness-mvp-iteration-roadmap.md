@@ -353,12 +353,17 @@ generalization lands only in 4+ slices.
   `data-contracts.md`), which is why it drifts and cannot be checked mechanically. Structuring it
   is a prerequisite for iter 8 (the convention profile shapes these files) and iter 9 (the
   deterministic gate-2 diffs against them).
-- **Token reality (why structured + sliced, not a full resident map):** a full fine-grained map
-  of a large repo (around 1000 classes x 5 methods plus edges) is roughly 90k tokens, too big to
-  hold resident. So the intended artifacts hold only the **seam worth preserving**
-  (boundary-crossing contracts + key domain classes, a fraction of all classes), staying a few k
-  tokens, near-resident or cheaply sliced. The full observed map stays in CodeGraph, queried per
-  task, never resident.
+- **Scope guardrail (resist 1:1 generation, not a size worry):** because CodeGraph holds every
+  signature, the easy path is to auto-generate these files 1:1 from the code. Do NOT. That would
+  (a) balloon them (a full fine-grained map of ~1000 classes x 5 methods + edges is roughly 90k
+  tokens, the cautionary ceiling, far too big to hold resident), (b) recreate the forbidden full
+  code index, and (c) couple intended to observed, which destroys reconciliation since intended
+  must survive code drift. Instead these files hold only the **curated seam worth preserving**
+  (boundary-crossing contracts + key domain classes, seeded from CodeGraph then trimmed by a
+  human), a fraction of all classes, a few k tokens, near-resident or cheaply sliced. The full
+  observed map stays in CodeGraph, queried per task, never resident. By construction this is
+  enough: reconciliation needs only the seam entries a feature touches (intended) diffed against
+  a CodeGraph slice (observed), never the whole map at once.
 - **Features introduced (sketch):**
   - `contracts.yaml` — intended data contracts as data: name, layer, fields + types, which
     boundary each crosses. Replaces the prose `data-contracts.md`.
