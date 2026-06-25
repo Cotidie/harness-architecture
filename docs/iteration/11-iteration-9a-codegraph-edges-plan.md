@@ -115,3 +115,33 @@ Confirmed BEFORE planning (the iteration-9 feasibility gate):
 - **Schema coupling.** Reading `codegraph.db` couples to its schema. Mitigation: the pinned-version guard fails loud on drift; the read is small (two tables, a few columns). If CodeGraph ships a stable export/CLI bulk dump later, swap the adapter's internals behind the same `observed_import_edges` function.
 - **Polyglot proof depends on the indexer.** If CodeGraph does not index a second language in this environment, the live polyglot claim is deferred (Task 1 decides). The architecture does not change either way.
 - **Daemon / lock contention.** The index DB may be open by the CodeGraph daemon. Open read-only and tolerate concurrent reads; surface any lock error as could-not-run, not a crash.
+
+---
+
+## Results (executed 2026-06-25 / 2026-06-26)
+
+Built Tasks 1-6. 116 tests OK (was 115 at iter-8.5 merge; +8 new across adapter/scanner/polyglot, net of the harness_check tests switching to injected ast). The harness's boundary checking now reads observed import edges from the CodeGraph index; the sample linter CLI is unchanged (`ast`).
+
+**Outcome: iteration shipped, polyglot proven live.**
+
+- **Mini-spike (Task 1):** CodeGraph indexes TypeScript and Go here, not only Python. `imports` edges resolve source-file -> target-file for 103/103 edges, so the observation is `(source_file, target_file, line)`: language-agnostic, no dotted-vs-relative import parsing. DB schema captured; pinned `schema_versions` max = 5.
+- **Adapter (Task 2):** `scripts/codegraph_index.py` reads `codegraph.db` READ-ONLY, guards the schema version (loud `CodegraphIndexError` on mismatch/missing), and yields deduped cross-file import edges (self-edges dropped).
+- **Scanner (Task 3):** `scripts/codegraph_scanner.py` maps both files of each edge to modules via the UNCHANGED domain `BoundaryRuleSet`, emitting the same `ImportEdge` / `ScanResult` contract. Dependency-injection seam (`edges=...`) for tests.
+- **Wiring (Task 4):** `harness_check`'s boundary check and `drift_scan` take an injected `scan_fn`, defaulting to the CodeGraph scanner (production) and overridable to `ast` (the temp-tree aggregation tests). `CodegraphIndexError` joins the could-not-run set, so a missing/stale index is exit 2, never a silent clean pass. Self-host `harness_check` stays all-clean exit 0 and matches the prior ast output; a planted forbidden edge is flagged through the CodeGraph path (after `codegraph sync`) with correct file:line.
+- **Polyglot proof (Task 5):** `examples/ts-mini/` (TypeScript) with a forbidden `domain -> adapters` import. `tests/test_polyglot_boundary.py` reads the real index and asserts the boundary use case flags it with the `.ts` file + line, same contract as Python. Passes here; `skipUnless` keeps it honest where the fixture is not yet indexed.
+
+### Adversarial pass (cli-user-test style)
+
+- missing index, non-sqlite garbage file, stale schema version (999) -> loud `CodegraphIndexError`, mapped to could-not-run (exit 2);
+- empty edge set -> empty `ScanResult`, no crash;
+- self-host no-regression: `harness_check` exit 0 with ts-mini also indexed (ts-mini edges map to no `src` module, so they are ignored).
+
+### Findings / gaps
+
+1. **Freshness is load-bearing now.** The CodeGraph path only sees edges after `codegraph sync` (the planted-edge proof needed a sync). The orchestrator already gates `sync` + `status --json` before checks, so this holds in the loop, but a manual `harness_check` against a stale index reports stale edges. Documented; the orchestrator's freshness gate is the control.
+2. **`matched_file_count` comes from edges, not file nodes.** A mapped file with zero imports is not counted (it has no import edge). The loud-fail guard still catches a total glob/layout mismatch (zero mapped sources). A future refinement could count from `kind='file'` nodes; out of scope for 9a.
+3. **Contract field diffing still `ast` (Python).** Unchanged: the index has no field nodes. Edges and (in 9b) method signatures are the CodeGraph wins.
+
+### 9b (next)
+
+Read method/function `signature` from the same adapter, make gate 2 a deterministic signature diff, and retire the LLM-judged gate 2.
