@@ -134,3 +134,37 @@ def observed_signature_nodes(db_path: str = ".codegraph/codegraph.db") -> Tuple[
         )
         for qn, name, kind, sig, fp, lang in rows
     )
+
+
+@dataclass(frozen=True)
+class ClassNode:
+    name: str
+    qualified_name: str
+    file_path: str
+    language: str
+
+
+_CLASS_SQL = """
+SELECT name, qualified_name, file_path, language
+FROM nodes
+WHERE kind = 'class'
+  AND file_path IS NOT NULL
+"""
+
+
+def observed_class_nodes(db_path: str = ".codegraph/codegraph.db") -> Tuple[ClassNode, ...]:
+    """Read class nodes from the CodeGraph index, schema-guarded and read-only.
+    The caller uses these to seed the domain map so a class with no method nodes
+    (a methodless value object, e.g. a frozen dataclass) is observed as present,
+    not absent. Without this, class existence would be inferred only from method
+    presence, and a value object would read as a missing class."""
+    conn = _connect_ro(db_path)
+    try:
+        _check_schema(conn)
+        rows = conn.execute(_CLASS_SQL).fetchall()
+    finally:
+        conn.close()
+    return tuple(
+        ClassNode(name=name, qualified_name=qn, file_path=fp, language=lang or "")
+        for name, qn, fp, lang in rows
+    )

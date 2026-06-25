@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from scripts.codegraph_index import ImportObservation
@@ -84,11 +85,63 @@ class CodegraphScannerTest(unittest.TestCase):
             SignatureNode("Other::baz", "baz", "method", "(self)",
                           "src/adapters/other.py", "python"),
         )
-        result = observed_domain_from_index("src/domain", nodes=nodes)
+        result = observed_domain_from_index("src/domain", nodes=nodes, class_nodes=())
         self.assertEqual(result, {"Foo": {"bar": "(x: int) -> int", "_hidden": "()"}})
         # adapters file excluded by domain_dir; free function excluded (no "::")
         self.assertNotIn("Other", result)
         self.assertNotIn("free_fn", result.get("Foo", {}))
+
+    def test_observed_domain_from_index_seeds_methodless_public_class(self):
+        # Regression: a public domain class with no method nodes (a value object,
+        # e.g. a frozen dataclass) must be observed as present-with-no-methods,
+        # not absent. Private classes stay excluded; classes outside domain_dir
+        # are excluded.
+        from scripts.codegraph_index import ClassNode, SignatureNode
+        from scripts.codegraph_scanner import observed_domain_from_index
+        sig_nodes = (
+            SignatureNode("Foo::bar", "bar", "method", "(self, x: int) -> int",
+                          "src/domain/foo.py", "python"),
+        )
+        class_nodes = (
+            ClassNode("Foo", "Foo", "src/domain/foo.py", "python"),
+            ClassNode("Valueless", "Valueless", "src/domain/foo.py", "python"),
+            ClassNode("_Private", "_Private", "src/domain/foo.py", "python"),
+            ClassNode("Outside", "Outside", "src/adapters/x.py", "python"),
+        )
+        result = observed_domain_from_index(
+            "src/domain", nodes=sig_nodes, class_nodes=class_nodes
+        )
+        self.assertEqual(result, {"Foo": {"bar": "(x: int) -> int"}, "Valueless": {}})
+        self.assertIn("Valueless", result)
+        self.assertEqual(result["Valueless"], {})
+        self.assertNotIn("_Private", result)
+        self.assertNotIn("Outside", result)
+
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REAL_DB = os.path.join(REPO_ROOT, ".codegraph", "codegraph.db")
+
+
+class RealRepoDomainObserverTest(unittest.TestCase):
+    @unittest.skipUnless(os.path.isfile(_REAL_DB), "no real .codegraph index")
+    def test_methodless_value_object_is_observed(self):
+        # BoundaryDecision is a frozen dataclass value object with no method
+        # nodes. Before the class-seeding fix it was invisible to the observer
+        # (so declaring it read as a missing class). It must now be present.
+        # The index stores repo-relative file paths, so mirror how the harness
+        # calls the observer: from the repo root, with a relative domain_dir.
+        from scripts.codegraph_scanner import observed_domain_from_index
+        cwd = os.getcwd()
+        os.chdir(REPO_ROOT)
+        try:
+            observed = observed_domain_from_index("src/domain", db_path=_REAL_DB)
+        finally:
+            os.chdir(cwd)
+        self.assertIn("BoundaryDecision", observed)
+        self.assertEqual(observed["BoundaryDecision"], {})
+        self.assertIn("BoundaryRuleSet", observed)
+        # private helper class is excluded
+        self.assertNotIn("_ModuleEntry", observed)
 
 
 if __name__ == "__main__":

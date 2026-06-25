@@ -16,8 +16,10 @@ import re
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from scripts.codegraph_index import (
+    ClassNode,
     ImportObservation,
     SignatureNode,
+    observed_class_nodes,
     observed_import_edges,
     observed_signature_nodes,
 )
@@ -93,19 +95,40 @@ def normalize_signature(sig: str) -> str:
 def observed_domain_from_index(
     domain_dir: str,
     nodes: Optional[Tuple[SignatureNode, ...]] = None,
+    class_nodes: Optional[Tuple[ClassNode, ...]] = None,
     db_path: str = ".codegraph/codegraph.db",
 ) -> Dict[str, Dict[str, str]]:
-    """Map CodeGraph signature nodes under `domain_dir` to {class: {method: sig}}.
-    Methods only (qualified_name contains '::'); free functions are not seam."""
+    """Map the domain layer under `domain_dir` to {class: {method: sig}}.
+
+    Class keys are seeded from CodeGraph CLASS nodes, so a methodless value
+    object (a frozen dataclass with no method nodes) is observed as present with
+    an empty method set, not absent. Methods come from signature nodes whose
+    qualified_name carries `Class::method`; free functions (no '::') are not seam.
+    Private classes (leading underscore) are excluded, matching the ast observer.
+    """
     if nodes is None:
         nodes = observed_signature_nodes(db_path)
+    if class_nodes is None:
+        class_nodes = observed_class_nodes(db_path)
     prefix = os.path.normpath(domain_dir)
-    out = {}
+
+    def _under(file_path: str) -> bool:
+        normalized = os.path.normpath(file_path)
+        return normalized == prefix or normalized.startswith(prefix + os.sep)
+
+    out: Dict[str, Dict[str, str]] = {}
+    for cls in class_nodes:
+        if cls.name.startswith("_"):
+            continue
+        if _under(cls.file_path):
+            out.setdefault(cls.name, {})
     for node in nodes:
         if "::" not in node.qualified_name:
             continue
-        if os.path.normpath(node.file_path).startswith(prefix + os.sep) or \
-                os.path.normpath(node.file_path) == prefix:
-            class_name, _, method = node.qualified_name.partition("::")
-            out.setdefault(class_name, {})[method] = normalize_signature(node.signature)
+        if not _under(node.file_path):
+            continue
+        class_name, _, method = node.qualified_name.partition("::")
+        if class_name.startswith("_"):
+            continue
+        out.setdefault(class_name, {})[method] = normalize_signature(node.signature)
     return out
