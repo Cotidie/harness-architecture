@@ -7,6 +7,8 @@ from scripts.codegraph_index import (
     EXPECTED_SCHEMA,
     CodegraphIndexError,
     observed_import_edges,
+    SignatureNode,
+    observed_signature_nodes,
 )
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,6 +81,32 @@ class CodegraphIndexTest(unittest.TestCase):
         self.assertTrue(edges, "expected some import edges in the real index")
         # every observation is a cross-file pair
         self.assertTrue(all(e.source_file != e.target_file for e in edges))
+
+    @unittest.skipUnless(os.path.isfile(REAL_DB), "no real .codegraph index")
+    def test_observed_signature_nodes_reads_methods_with_signatures(self):
+        nodes = observed_signature_nodes(REAL_DB)
+        self.assertTrue(all(isinstance(n, SignatureNode) for n in nodes))
+        # the known domain method is present, with its class via qualified_name and a real signature
+        match = [
+            n for n in nodes
+            if n.qualified_name == "BoundaryRuleSet::module_for_path"
+        ]
+        self.assertEqual(len(match), 1, match)
+        n = match[0]
+        self.assertEqual(n.kind, "method")
+        self.assertIn("path: str", n.signature)
+        self.assertTrue(n.file_path.endswith("boundary_rule_set.py"))
+        self.assertEqual(n.language, "python")
+
+    def test_observed_signature_nodes_schema_guard(self):
+        import scripts.codegraph_index as ci
+        saved = ci.EXPECTED_SCHEMA
+        ci.EXPECTED_SCHEMA = 999
+        try:
+            with self.assertRaises(ci.CodegraphIndexError):
+                ci.observed_signature_nodes(REAL_DB)
+        finally:
+            ci.EXPECTED_SCHEMA = saved
 
 
 if __name__ == "__main__":
