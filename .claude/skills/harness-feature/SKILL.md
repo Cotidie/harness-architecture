@@ -153,7 +153,12 @@ Run all three yourself via Bash:
    legitimate new contract or signature is expected to differ from the docs until the patch's doc
    update lands (that intended-vs-observed reconciliation is the Inspector's job in step 5, not a
    gate-1 blocker). Exit 0 = clean; exit 1 = a forbidden edge; exit 2 = could-not-run.
-3. Scope: `git diff --name-only` against the pre-Builder state is a subset of the patch's
+3. `python -m scripts.harness_check --only intended_diff` -> run to produce the deterministic
+   gate-2 input for the Inspector. Capture its full output (the `## Domain signature mismatches`
+   section). A mismatch on a symbol the patch did NOT touch is reconciliation context passed to
+   the Inspector in step 5, not a gate-1 stop. Boundaries (item 2 above) remains the only hard
+   gate-1 stop from this step.
+4. Scope: `git diff --name-only` against the pre-Builder state is a subset of the patch's
    "Files allowed to edit".
 
 If any fails, STOP. Emit the failing check as the verdict and do NOT dispatch the Inspector:
@@ -167,11 +172,13 @@ If any fails, STOP. Emit the failing check as the verdict and do NOT dispatch th
 ### Step 5: Inspector for judgment (gate 2 + verdict)
 
 If gate 1 passed, run the **freshness check** and read the metered query-count, then dispatch the
-`inspector` subagent. The Inspector (iter-6 def) does gate 2 + the design check list + verdict
-ONLY: it does not re-run gate 1 and does not bump state. Tell it gate 1 already passed (by you).
-It emits the final label, writes the report, and a `## Next action` block the revise loop reads.
-After it returns, read the counter: the delta is the Inspector's metered query count (require
-<= 1).
+`inspector` subagent. The Inspector reads the orchestrator's deterministic `intended_diff` result
+for gate 2 (not re-deriving signatures), then does the design check list and emits a verdict. It
+does not re-run gate 1 and does not bump state. Pass the `intended_diff` report text (from step 4,
+item 3) to the Inspector along with the gate-1 PASS note. It emits the final label, writes the
+report, and a `## Next action` block the revise loop reads.
+After it returns, read the counter: the delta is the Inspector's metered query count (at most 1;
+may be 0 if the design check list needed no query).
 
 ### Step 6: on ACCEPT, auto-commit
 
@@ -228,4 +235,5 @@ All the iter-5 honor-system gaps now have teeth:
 - **Full-graph drift scan** (iter 6): a feature-independent repo-wide drift check on the cadence.
 
 Inspector (iter-6 def) does gate 2 + verdict + `## Next action` only; the orchestrator owns
-gate 1 and `state.yaml`.
+gate 1 and `state.yaml`. As of iter-9b, gate 2 is the deterministic `intended_diff` check
+(read by the Inspector from the orchestrator-provided report, not re-derived via a query).

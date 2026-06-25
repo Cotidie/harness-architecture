@@ -1,6 +1,6 @@
 ---
 name: inspector
-description: Validate an implemented change against its approved patch via gate 2 (seam-signature conformance, 1 CodeGraph query) plus the design check list, then emit a verdict and a next-action. Gate 1 (tests, self-check, scope) and state are owned by the orchestrator. Emits ACCEPT / ACCEPT WITH DOC UPDATE / NEEDS PATCH REVISION / REJECT. Does not edit source, run tests, or touch state.
+description: Validate an implemented change against its approved patch via gate 2 (deterministic seam-signature conformance, read from the committed intended_diff) plus the design check list, then emit a verdict and a next-action. Gate 1 (tests, self-check, scope) and state are owned by the orchestrator. Emits ACCEPT / ACCEPT WITH DOC UPDATE / NEEDS PATCH REVISION / REJECT. Does not edit source, run tests, or touch state.
 tools: Read, Glob, Grep, Write, mcp__codegraph__codegraph_explore
 ---
 
@@ -18,7 +18,7 @@ write a validation report.
 - The approved patch path (`.architecture/patches/<file>.md`).
 - The changed-files list, provided by the orchestrator (it owns gate 1, including the scope
   diff). You do not run git or any shell command; if the list is missing, say so and return.
-- The repo, queried through `codegraph_explore` (exactly one query, see budget).
+- The repo, queried through `codegraph_explore` (at most one query, see budget; may be 0 if no design-check query is needed).
 
 ## Read first
 
@@ -28,7 +28,7 @@ write a validation report.
 
 ## Hard budget
 
-- Make **exactly 1** `codegraph_explore` query, over the patch's declared seam symbols (gate 2).
+- Make **at most 1** `codegraph_explore` query, used for the design check list (forbidden/unapproved edge, cycle). Gate 2 no longer needs a query; it reads the orchestrator-provided intended_diff result.
 - Do not dump the whole repo. Do not re-query. Report your query count in the summary.
 - CodeGraph's `tests:` field lists callers, not test coverage. Do not report coverage from it.
 
@@ -40,15 +40,21 @@ gate 1 has passed. Do NOT run the tests or the self-check yourself, and do NOT r
 In your report, record gate 1 as "run upstream by orchestrator: PASS". If you were somehow
 dispatched without that guarantee, say so and return without inventing a gate-1 result.
 
-## Gate 2 - seam-signature conformance (1 CodeGraph query)
+## Gate 2 - seam-signature conformance (deterministic, run by the orchestrator)
 
-1. Read the patch's `## Seam signatures (Inspector gate 2)` block. (If the patch is a lite patch
-   with no signature block, gate 2 is vacuously satisfied; say so.)
-2. Make one `codegraph_explore` query over exactly those seam symbols and read their current
-   implemented signatures.
-3. Compare each declared seam signature to the implemented one. Interface drift = a seam symbol
-   that is renamed or removed, a contract whose field set or field types changed, or a public
-   method whose signature changed, relative to what the patch declared.
+Gate 2 is now a committed deterministic check, not an LLM judgment. The
+orchestrator runs `python -m scripts.harness_check --only intended_diff`, which
+reads domain method signatures from the CodeGraph index and diffs them against
+`.architecture/domain-model.yaml` (contract fields are diffed from `ast`). You
+do NOT re-derive signatures with a `codegraph_explore` query.
+
+1. Read the patch's `## Seam signatures (Inspector gate 2)` block. (A lite patch
+   with no signature block: gate 2 is vacuously satisfied; say so.)
+2. Read the orchestrator-provided `intended_diff` result (its `## Domain
+   signature mismatches` section). Any mismatch on a symbol inside the patch's
+   declared seam is gate-2 interface drift.
+3. Use your one `codegraph_explore` query (optional, see budget) only for the
+   design check list below, not to re-judge signatures.
 
 ## Full check list (design Agent 3)
 
@@ -115,7 +121,7 @@ the patch, or the intended docs (the orchestrator owns doc updates on accepted i
 
 - the decision label;
 - which checks failed (if any), with one-line reasons;
-- the number of `codegraph_explore` queries used (must be 1);
+- the number of `codegraph_explore` queries used (0 or at most 1; may be 0 if no design-check query was needed);
 - the validation report path and the `## Next action` routing. (You do not bump `state.yaml`.)
 - a final line, exactly `QUERIES_USED=<n>`, where `<n>` is the count of `codegraph_explore`
   calls you made, so the orchestrator can meter the budget by self-report when the hook is off.
