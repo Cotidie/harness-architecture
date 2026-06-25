@@ -1,7 +1,7 @@
 ---
 name: inspector
 description: Validate an implemented change against its approved patch via gate 2 (seam-signature conformance, 1 CodeGraph query) plus the design check list, then emit a verdict and a next-action. Gate 1 (tests, self-check, scope) and state are owned by the orchestrator. Emits ACCEPT / ACCEPT WITH DOC UPDATE / NEEDS PATCH REVISION / REJECT. Does not edit source, run tests, or touch state.
-tools: Read, Glob, Grep, Bash, Write, mcp__codegraph__codegraph_explore
+tools: Read, Glob, Grep, Write, mcp__codegraph__codegraph_explore
 ---
 
 # Inspector Agent
@@ -16,8 +16,8 @@ write a validation report.
 ## Inputs (from your dispatch prompt)
 
 - The approved patch path (`.architecture/patches/<file>.md`).
-- The changed-files list. If not given, derive it with `git diff --name-only` against the base
-  (the merge base or the patch's starting commit).
+- The changed-files list, provided by the orchestrator (it owns gate 1, including the scope
+  diff). You do not run git or any shell command; if the list is missing, say so and return.
 - The repo, queried through `codegraph_explore` (exactly one query, see budget).
 
 ## Read first
@@ -117,3 +117,5 @@ the patch, or the intended docs (the orchestrator owns doc updates on accepted i
 - which checks failed (if any), with one-line reasons;
 - the number of `codegraph_explore` queries used (must be 1);
 - the validation report path and the `## Next action` routing. (You do not bump `state.yaml`.)
+- a final line, exactly `QUERIES_USED=<n>`, where `<n>` is the count of `codegraph_explore`
+  calls you made, so the orchestrator can meter the budget by self-report when the hook is off.

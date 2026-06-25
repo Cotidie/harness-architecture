@@ -53,3 +53,6 @@ request a patch revision.
 - tests added or updated;
 - any assumptions made, and anything the patch left ambiguous.
 - no em-dash characters anywhere.
+- a final line, exactly `QUERIES_USED=<n>`, where `<n>` is the count of `codegraph_explore`
+  calls you made (often 0 for a clear patch), so the orchestrator can meter the budget by
+  self-report when the hook is off.

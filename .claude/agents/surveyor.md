@@ -79,4 +79,6 @@ Write to `.architecture/` (create the directory and `.architecture/diagrams/`):
 - number of `codegraph_explore` queries used;
 - the modules and edges observed;
 - any observed-vs-intended drift, with its label;
-- which artifacts were written.
+- which artifacts were written;
+- a final line, exactly `QUERIES_USED=<n>`, where `<n>` is the count of `codegraph_explore`
+  calls you made, so the orchestrator can meter the budget by self-report when the hook is off.
