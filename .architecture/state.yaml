@@ -1,5 +1,5 @@
-last_reconciled_commit: "80276d77c6e1ad4394d4b9972130e94d1a446cd6"
-last_validated_commit: "80276d77c6e1ad4394d4b9972130e94d1a446cd6"
+last_reconciled_commit: "bbf88f766c45ded17ccdb5c90fe75517994cc200"
+last_validated_commit: "bbf88f766c45ded17ccdb5c90fe75517994cc200"
 last_validation_time: "2026-06-25T08:42:34Z"
 last_reconciliation_decision: "ALIGNED (--format json CLI output, format-json patch, iteration 5)"
 last_validation_decision: "ACCEPT (--format json CLI output, format-json patch)"
