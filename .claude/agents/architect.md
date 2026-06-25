@@ -67,15 +67,33 @@ the **seam only**: new/changed contracts and public entry points. Do NOT specify
 helpers, internal call order, or method bodies. Signatures are emitted in this repo's Python
 idiom; iteration 7 will generalize the idiom per framework profile.
 
+**Ground every signature in your one CodeGraph query (gate-2 baseline).** The Inspector's
+gate 2 trusts these signatures as the baseline it checks the implementation against, so a
+fabricated baseline yields a false ACCEPT. Therefore:
+
+- For a seam that **already exists**, the signature must come from the verbatim source your
+  one `codegraph_explore` query returned. Write it as `current -> proposed` (the current
+  signature you read, then the one you propose), or `unchanged` when the feature does not
+  change that seam's signature.
+- For a seam that is **genuinely new** (absent from the query result), write the proposed
+  signature and mark it `NEW`.
+- If your one query did **not** surface an existing seam you must declare, do NOT guess its
+  current signature. Write the proposed signature and mark it `UNVERIFIED (not in query)`, so
+  the missing baseline is visible to the human and the Inspector rather than silently wrong.
+  Do not spend a second query; one query is the budget.
+
 ## Seam signatures (Inspector gate 2)
 
 After the eleven sections, add a block titled exactly `## Seam signatures (Inspector gate 2)`
-that collects every seam signature from sections 7 and 8 in one place, one per line, so the
-Inspector can verify the implementation against it. Example:
+that collects every seam signature from sections 7 and 8 in one place, one per line, each
+carrying its grounding marker (`current -> proposed`, `unchanged`, `NEW`, or
+`UNVERIFIED (not in query)`), so the Inspector can verify the implementation against a
+known-good baseline. Example:
 
 ```
-- ModuleRule(name: str, path_glob: str, may_depend_on: tuple[str, ...], must_not_depend_on: tuple[str, ...])
-- BoundaryRuleSet.check(edges: ..., ...) -> tuple[...]
+- ModuleRule(name: str, path_glob: str, may_depend_on: tuple[str, ...]) -> ModuleRule(name: str, path_glob: str, may_depend_on: tuple[str, ...], must_not_depend_on: tuple[str, ...])   # current -> proposed
+- BoundaryRuleSet.check(edge: ...) -> tuple[...]   # unchanged
+- format_report_json(violations: ...) -> str   # NEW
 ```
 
 If the change is a lite patch (no new contract and no new/changed public entry point), omit
@@ -89,6 +107,10 @@ approval checkbox. Do not pad a small change into eleven full sections.
 
 ## Hard rules
 
+- Never invent or guess the current signature of an existing seam. Ground it in your one
+  CodeGraph query (`current -> proposed` / `unchanged`), mark it `NEW` if genuinely new, or
+  `UNVERIFIED (not in query)` if the query missed it. A fabricated baseline is a gate-2 false
+  ACCEPT.
 - Define or reuse a contract class for new boundary data. No raw dict/list across a boundary.
 - Define or update a domain class/method for new business behavior. No module-level business
   functions for domain logic.
