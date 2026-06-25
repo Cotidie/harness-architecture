@@ -26,7 +26,10 @@ from src.application.boundaries.lint_boundaries import LintBoundaries
 
 
 def run(
-    target_dir: str, boundaries_file: str, output_format: str = "text"
+    target_dir: str,
+    boundaries_file: str,
+    output_format: str = "text",
+    quiet: bool = False,
 ) -> int:
     module_rules = load_module_rules(boundaries_file)
     use_case = LintBoundaries()
@@ -42,7 +45,10 @@ def run(
         )
     violations = use_case.run(module_rules, scan.edges, scan.parse_failures)
     formatter = format_report_json if output_format == "json" else format_report
-    print(formatter(violations))
+    # On a clean run under --quiet, suppress the formatter's clean-run message
+    # entirely. Violations are always reported; exit codes are unchanged.
+    if not (quiet and not violations):
+        print(formatter(violations))
     return 1 if violations else 0
 
 
@@ -58,6 +64,12 @@ def main(argv: Sequence[str]) -> int:
         choices=("text", "json"),
         default="text",
     )
+    parser.add_argument(
+        "--quiet",
+        dest="quiet",
+        action="store_true",
+        default=False,
+    )
     try:
         parsed = parser.parse_args(list(argv))
     except SystemExit:
@@ -67,7 +79,10 @@ def main(argv: Sequence[str]) -> int:
         return 2
     try:
         return run(
-            parsed.target_dir, parsed.boundaries_file, parsed.output_format
+            parsed.target_dir,
+            parsed.boundaries_file,
+            parsed.output_format,
+            parsed.quiet,
         )
     except (
         FileNotFoundError,

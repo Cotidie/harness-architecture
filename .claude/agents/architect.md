@@ -124,4 +124,6 @@ approval checkbox. Do not pad a small change into eleven full sections.
 - number of `codegraph_explore` queries used (must be 1);
 - the reconciliation label and one-line justification;
 - the patch path written;
-- the proposed module/domain/contract changes in brief.
+- the proposed module/domain/contract changes in brief;
+- a final line, exactly `QUERIES_USED=<n>`, where `<n>` is the count of `codegraph_explore`
+  calls you made, so the orchestrator can meter the budget by self-report when the hook is off.
