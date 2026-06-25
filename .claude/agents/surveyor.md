@@ -56,23 +56,40 @@ alone, clearly labeled as intended-only.
 Caveat: CodeGraph's `tests:` field lists callers of a symbol, not test coverage. Do not report
 test coverage from it. If you want to note coverage, say it is unverified.
 
-## Outputs (write all seven)
+## Outputs (write all nine)
 
 Write to `.architecture/` (create the directory and `.architecture/diagrams/`):
 
 1. `architecture.md` : intended module map, key boundaries, accepted tradeoffs, known risks.
 2. `boundaries.yaml` : intended allowed/forbidden dependencies, one block per module, using the
    schema in design section 10 (`path`, `responsibility`, `may_depend_on`, `must_not_depend_on`).
-3. `domain-model.md` : intended domain classes, invariants, and refactor candidates.
-4. `data-contracts.md` : official data contract classes, their boundaries, and raw-payload risks.
-5. `graph-notes.md` : compact CodeGraph observations, and any place where observed structure
+3. `contracts.yaml` : the intended data contracts as **structured data**, one entry per
+   boundary-crossing contract class under `src/contracts/`. Schema per entry: `name`, `layer`,
+   `module`, `crosses` (the boundary, prose), `fields` (mapping of field name -> type annotation
+   written EXACTLY as the code spells it, e.g. `Tuple[str, ...]`), optional `notes`. This is the
+   definition layer that `scripts/intended_diff.py` diffs against the code.
+4. `domain-model.yaml` : the intended **key** domain classes as structured data. Schema per entry:
+   `name`, `layer`, `module`, `responsibility`, `invariants` (list), `methods` (mapping of public
+   method name -> signature string written exactly as the code spells it). If there are no domain
+   classes worth curating, write `domain_classes: []`.
+5. `domain-model.md` : the intended domain **rules** and refactor candidates (narrative only; the
+   per-class definitions go in `domain-model.yaml`, not here).
+6. `data-contracts.md` : the intended contract **rules** and raw-payload risks (narrative only;
+   the per-contract definitions go in `contracts.yaml`, not here).
+7. `graph-notes.md` : compact CodeGraph observations, and any place where observed structure
    drifts from intended (this is where you record drift, with a label: ALIGNED,
    DOC_DRIFT_ACCEPTED, CODE_DRIFT_HARMFUL, or UNCLEAR_DRIFT).
-6. `diagrams/current.mmd` : a high-level Mermaid diagram of modules and their dependency edges.
+8. `diagrams/current.mmd` : a high-level Mermaid diagram of modules and their dependency edges.
    Boundaries only, not symbols.
-7. `state.yaml` : metadata only, using the schema in design section 9
+9. `state.yaml` : metadata only, using the schema in design section 9
    (`last_reconciled_commit`, `last_validated_commit`, `last_validation_time`,
    `last_reconciliation_decision`, `last_codegraph_query_scope`, `notes`).
+
+**Curated-seam guardrail (do NOT 1:1 dump):** `contracts.yaml` and `domain-model.yaml` hold only
+the seam worth preserving (all boundary-crossing contracts; the KEY domain classes, not every
+class, never private impl-detail classes). CodeGraph holds the full map; do not recreate it here.
+Seed these from your observation, then trim to the seam. Bloating them recreates the forbidden
+full code index and couples intended to observed, which destroys reconciliation.
 
 ## Final summary (return to caller)
 

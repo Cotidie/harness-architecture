@@ -4,12 +4,11 @@ Domain classes are first-class. Business behavior belongs here, not in
 module-level functions. CodeGraph is the source of truth for what currently
 exists; this file records what should be preserved.
 
-Status: no domain classes exist yet. This file states the intended rules; the
-actual classes are defined as real features land (starting iteration 2).
-
-## Intended domain classes
-
-None yet. When business behavior appears it must take the shape of a domain
+Per-class definitions (key domain classes, their responsibilities, invariants,
+and public method signatures) live in `domain-model.yaml` as structured data,
+diffed against the code by `scripts/intended_diff.py`. This file states the
+intended **rules** only. The curated key domain class is `BoundaryRuleSet` (the
+boundary-policy object); new business behavior must take the shape of a domain
 class or method under `src/domain/`, not a module-level function.
 
 ## Invariants to preserve
