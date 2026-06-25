@@ -111,3 +111,31 @@ Mirror `scripts/drift_scan.py`: a `compute_*` function returning a frozen report
 - **Type-string brittleness.** The contract diff compares annotation strings (`Tuple[str, ...]`), so a cosmetic re-spelling (`typing.Tuple` vs `Tuple`, `tuple` lowercase) reads as drift. Mitigation this iteration: author the YAML to match the code's exact idiom and whitespace-normalize only. A semantic type normalizer is out of scope (revisit if it proves noisy).
 - **Domain unexercised on self-host.** With zero domain classes, the domain diff is proven only by unit test, never by dogfood, until a feature introduces a domain class. Accepted; called out in the results note.
 - **Curated-seam discipline is a human judgment.** The guardrail against 1:1 generation lives in the Surveyor prose and human curation, not in a mechanical limit. If the YAML balloons, that is the signal to trim, not to add a cap.
+
+---
+
+## Results (executed 2026-06-25)
+
+Built Tasks 1-5: structured intended layer (`contracts.yaml`, `domain-model.yaml`), the committed ast diff (`scripts/intended_diff.py` + 10 unit tests), orchestrator step-0b wiring, and the Surveyor-def change. 91 tests OK (was 81, +10).
+
+**Outcome: iteration shipped.** `python -m scripts.intended_diff src .architecture/contracts.yaml .architecture/domain-model.yaml` reports ALIGNED (exit 0) on the current repo; both other step-0b checks (linter self-check, `drift_scan`) stay clean.
+
+- **Contracts diffed for real:** the three contracts (`ModuleRule`, `ImportEdge`, `BoundaryViolation`) are declared in `contracts.yaml` and match the code's fields/types exactly. Strict both-directions: a renamed field, a changed type, an undeclared contract in code, and an extra observed field are all reported as drift (verified by planted mismatch + unit test).
+- **Domain diff is genuinely dogfooded (plan premise corrected).** The plan assumed zero domain classes from the stale `domain-model.md`, but `src/domain/` has `BoundaryRuleSet` (the boundary-policy object). It is now curated in `domain-model.yaml` with its three public method signatures; the diff confirms they match the code, and a planted signature change is reported as drift. So the "domain unexercised on self-host" risk in the plan no longer holds. `BoundaryDecision` (a value object with no public methods) and private `_ModuleEntry` are correctly NOT drift (info-only / filtered).
+- **Determinism:** the diff is `ast`-only, no CodeGraph, so it is committed, unit-tested, and unmetered, exactly the iteration-6 lesson applied. Detection is by the script, not by a model reading prose.
+
+### Adversarial pass (cli-user-test style)
+
+- planted field rename / type change / domain signature change -> each reported as the right drift category, exit 1;
+- ALIGNED -> exit 0;
+- malformed YAML, missing file -> clean `error:` on stderr, exit 2 (no traceback);
+- too few args -> usage on stderr, exit 2;
+- target dir with no `contracts/` subdir -> all declared contracts reported missing, exit 1;
+- empty `contracts:` -> the three code contracts reported as undeclared, exit 1.
+
+### Findings / remaining gaps
+
+1. **Plan premise was wrong about domain emptiness** (corrected in commit `45e9f92`). Lesson: the prose `domain-model.md` had drifted ("no domain classes exist yet") from the actual code, which is exactly the prose-drift this iteration exists to kill. Structuring it surfaced the staleness immediately.
+2. **Type-string brittleness is real but bounded.** Comparison is whitespace-normalized literal string match, so `Tuple` vs `tuple` vs `typing.Tuple` would read as drift. Acceptable this iteration; a semantic normalizer is out of scope and deferred.
+3. **`BoundaryDecision` is a domain value object not yet curated** (info-only). If a future feature gives it behavior, curate it. The domain schema is method-centric, so a fields-only value object adds little to the diff today.
+4. **Architect sections 7-8 still emit prose seam signatures**, now informed by the YAML but not yet structured diffs to it. Deferred follow-up, as planned.
