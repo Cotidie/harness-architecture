@@ -70,34 +70,45 @@ Decide by a logged rule, not intuition:
 
 Run this whenever step 0's cadence fires (code-commit count over threshold, `--resurvey`, or
 `--drift-scan`). It is **feature-independent**: it checks the WHOLE repo, not the feature's area,
-to surface drift that accumulates outside any single feature. Three committed checks, no ad-hoc
+to surface drift that accumulates outside any single feature. ONE committed entrypoint, no ad-hoc
 python:
 
-1. Full linter self-check repo-wide: `python -m src.adapters.boundaries.cli src
-   .architecture/boundaries.yaml`; report any forbidden edge anywhere in `src/`.
-2. Module AND edge drift: `python -m scripts.drift_scan src .architecture/boundaries.yaml`. This
-   committed script reuses the linter's scanner to compute the observed module-edge graph and
-   diffs it against `.architecture/boundaries.yaml`: it flags **undeclared modules** (observed,
-   not declared) and **undeclared edges** (an observed module->module import in neither
-   `may_depend_on` nor `may_only_depend_on` of the source). It exits 1 when such drift exists, 0
-   when clean. Forbidden edges and unmaterialized declared modules are reported as info (the
-   linter owns the former; the latter is intended-ahead-of-observed, not drift).
-3. Intended-vs-observed signature drift: `python -m scripts.intended_diff src
-   .architecture/contracts.yaml .architecture/domain-model.yaml`. This committed script extracts
-   the observed contract fields and domain method signatures with `ast` and diffs them against the
-   structured intended layer (`contracts.yaml`, `domain-model.yaml`): it flags **missing classes**,
-   **field mismatches**, **undeclared contracts** (a contract class in code absent from the YAML),
-   and **domain signature mismatches**. A domain class observed but not curated is info, not drift.
-   It exits 1 on drift, 0 when ALIGNED.
+```
+python -m scripts.harness_check
+```
 
-None of these three needs a CodeGraph query: all are deterministic from source, so they are not
-metered. The structured intended layer this check reads (`contracts.yaml`, `domain-model.yaml`)
-is the definition layer; the prose `data-contracts.md` / `domain-model.md` now hold the intended
-rules only.
+`harness_check` reads the code root from `.architecture/profile.yaml` (`source_root`, so it is
+not tied to `src/`) and runs the three deterministic checks against it, then prints ONE combined
+report with one exit code:
 
-Write all three reports to `.architecture/validation/drift-scan.md` (date, trigger, plus each
-script's output) and surface them. Report only; resolving drift is a human/Architect decision,
-never automatic.
+1. **boundaries linter** (forbidden-edge self-check repo-wide);
+2. **drift_scan** (undeclared modules AND undeclared cross-module edges vs `boundaries.yaml`);
+3. **intended_diff** (missing classes, field mismatches, undeclared contracts, domain signature
+   mismatches vs `contracts.yaml` / `domain-model.yaml`).
+
+Exit code: `0` all clean, `1` any drift, `2` could-not-run (e.g. no profile / no `source_root` /
+missing intended-layer YAML). None of the three needs a CodeGraph query, so this surface is
+deterministic and **unmetered**. The structured intended layer it reads (`contracts.yaml`,
+`domain-model.yaml`) is the definition layer; the prose `data-contracts.md` / `domain-model.md`
+hold the intended rules only.
+
+**Branch on the exit code (do not treat all non-zero the same):**
+
+- `0` (clean): note it, continue.
+- `1` (drift): **surface, do not auto-block.** Write the report (below) and flag the drift for the
+  human/Architect; resolving drift is their decision, not the loop's. The feature loop continues.
+- `2` (could-not-run): **STOP and flag a check failure.** The scan could not verify anything (no
+  profile yet, missing `boundaries.yaml`/`contracts.yaml`/`domain-model.yaml`, or a bad
+  `source_root`). Do NOT proceed as if the repo were clean: a silently skipped governance check is
+  worse than a failing one. If the cause is "not yet surveyed" (no `profile.yaml`), route to the
+  Surveyor (step 0) first; otherwise surface the setup error for a human to fix.
+
+Note the precedence inside the combined exit code: error > drift > clean, so a `2` can hide a drift
+the report still lists. Read the report, not just the exit code.
+
+Write `harness_check`'s combined report to `.architecture/validation/drift-scan.md` (date, trigger,
+plus the output) and surface it. Report only; resolving drift is a human/Architect decision, never
+automatic.
 
 ### Step 1: Architect -> patch
 
@@ -135,14 +146,22 @@ changes, tests, assumptions).
 Run all three yourself via Bash:
 
 1. `python -m unittest discover -s tests` -> must pass.
-2. `python -m src.adapters.boundaries.cli src .architecture/boundaries.yaml` -> must exit 0.
+2. `python -m scripts.harness_check --only boundaries` -> must exit 0. This runs the boundary
+   linter through the unified, profile-driven surface (it resolves the code root from
+   `profile.yaml.source_root`, so it is not tied to `src/`). Gate 1 uses `--only boundaries`
+   deliberately: it checks forbidden edges only, NOT the full repo-wide drift scan, because a
+   legitimate new contract or signature is expected to differ from the docs until the patch's doc
+   update lands (that intended-vs-observed reconciliation is the Inspector's job in step 5, not a
+   gate-1 blocker). Exit 0 = clean; exit 1 = a forbidden edge; exit 2 = could-not-run.
 3. Scope: `git diff --name-only` against the pre-Builder state is a subset of the patch's
    "Files allowed to edit".
 
 If any fails, STOP. Emit the failing check as the verdict and do NOT dispatch the Inspector:
 
 - tests fail -> `REJECT: TEST FAILURE`
-- self-check exits non-zero -> `REJECT: ARCHITECTURE VIOLATION`
+- the boundary check exits 1 (forbidden edge) -> `REJECT: ARCHITECTURE VIOLATION`
+- the boundary check exits 2 (could-not-run, e.g. no profile / missing boundaries.yaml) ->
+  `STOP: CHECK COULD NOT RUN` (the gate could not verify; fix the harness setup, do not proceed)
 - a changed file outside the allowed list -> `REJECT: out-of-scope edit`
 
 ### Step 5: Inspector for judgment (gate 2 + verdict)
