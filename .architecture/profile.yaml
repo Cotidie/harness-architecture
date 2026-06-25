@@ -15,6 +15,9 @@
 #   label           : a free-text human note for this project (e.g. "python-ddd",
 #                     "flask app"). NOTHING branches on it; it is documentation.
 #   language        : the primary language.
+#   source_root     : the code root the deterministic checks target, relative to
+#                     the repo root (e.g. "src"). `harness check` resolves all
+#                     check paths from this instead of hardcoding a directory.
 #   detected_from   : evidence the profile was seeded from (manifests, layout).
 #   roles           : mapping of ABSTRACT harness role -> this project's layer
 #                     name. The agents reason in roles; the profile resolves them
@@ -31,6 +34,7 @@
 #                     diff compare meaning rather than exact text is iteration 9).
 label: python-ddd   # free-text note only; nothing branches on it
 language: python
+source_root: src
 detected_from:
   - requirements.txt
   - "src/ layered layout (domain/contracts/application/adapters)"
