@@ -404,6 +404,26 @@ generalization lands only in 4+ slices.
 - **Risks / open decisions:** how much of the domain to capture as intended (seam only, not every
   class, to stay compact); whether `architecture.md` stays prose (narrative) while contracts and
   domain-model go structured (recommended: yes, narrative stays prose, definitions go structured).
+- **DONE (2026-06-25), see [`08-iteration-7-structured-intended-plan.md`](08-iteration-7-structured-intended-plan.md).** Shipped `contracts.yaml` + `domain-model.yaml` and a committed, unit-tested `scripts/intended_diff.py`. ALIGNED on self-host; planted mismatches caught mechanically.
+- **Lessons (post-iteration 7) that change later slices:**
+  1. **The "ast vs CodeGraph" choice was a false binary; the observed-extractor should read the
+     CodeGraph index, not re-parse source.** Iter 7 extracted observed signatures with Python
+     `ast` because that is deterministic and committable, framing CodeGraph as the
+     non-deterministic MCP-only alternative. That framing missed the dominating option: a
+     **committed script that reads the `.codegraph/` index (SQLite) directly** is deterministic
+     AND committable AND polyglot, and reuses the structure CodeGraph already parsed instead of
+     re-deriving a weaker Python-only copy. The iter-7 ast extractor is a **Python-only
+     bootstrap**, not the final mechanism; treat it as throwaway for non-Python.
+  2. **Prose docs are unsafe as a planning input.** The iter-7 plan assumed zero domain classes
+     because `domain-model.md` said so; the code actually had `BoundaryRuleSet`. Structuring the
+     layer caught the stale prose at once. This is exactly the drift the harness exists to kill,
+     and it bit the planning step. Rule going forward: verify intended-layer claims against
+     CodeGraph/code before planning on them, and prefer running the structured diff early as a
+     planning input.
+  3. **Literal type-string comparison is brittle and Python-coupled** (`Tuple` vs `tuple` vs
+     `typing.Tuple`), which forces the intended YAML into the code's exact idiom. This is a
+     generalization smell that iteration 8 (framework-aware idioms) must address, and iteration 9
+     should pair with semantic, language-aware signature comparison.
 
 ## Iteration 8 — Framework-aware architecture model *(light — added 2026-06-25 from feedback)*
 
@@ -432,7 +452,10 @@ generalization lands only in 4+ slices.
     rules; the `domain/contracts/application/adapters` set becomes *one example profile*, not
     the law baked into prose.
   - **Idiomatic seam signatures** — the Architect's iter-4 signature emission renders in the
-    profile's language (Python sig / TS type / Java interface).
+    profile's language (Python sig / TS type / Java interface). Note (from iter-7): the structured
+    diff currently compares type strings literally, so it is brittle across spellings (`Tuple` vs
+    `tuple`) and coupled to Python. The profile's signature idiom is where that gets normalized, so
+    the diff compares meaning, not exact text.
 - **Testable conditions (sketch):** Surveyor on a non-DDD layout (e.g. a Flask sample) produces
   a `boundaries.yaml` naming that framework's modules and a profile recording the framework; the
   Architect's patch for a feature on that repo uses the profile's vocabulary and signature idiom,
@@ -452,12 +475,17 @@ generalization lands only in 4+ slices.
   (`src/adapters/boundaries/python_import_scanner.py`); supporting TS/Java imports is a real
   parser/data-source lift, the most expensive piece of generalization. Sequenced after the
   cheap model generalization and validated like everything else on a real sample first.
-- **Likely shape (one fork to decide when detailing):**
-  - **A) Lean on CodeGraph edges** — CodeGraph already indexes multiple languages; derive
-    import/dependency edges from the graph instead of parsing source, making the scanner an
-    adapter over CodeGraph rather than over `ast`. Polyglot "for free", couples to CodeGraph.
+- **Likely shape (fork now leaning A, from iter-7 lessons):**
+  - **A) Lean on the CodeGraph index (recommended):** CodeGraph already indexes multiple
+    languages; derive import/dependency edges AND observed signatures from the graph (read the
+    `.codegraph/` index directly so the check stays a deterministic committed script, not an MCP
+    call) instead of parsing source. Polyglot "for free", couples to CodeGraph. Iteration 7 showed
+    the alternative (re-parsing source with `ast`) is a Python-only dead end that duplicates what
+    CodeGraph already holds, so the same applies to the boundary scanner and the gate-2 extractor:
+    make both adapters over the CodeGraph index, reusing iter-7's diff logic unchanged.
   - **B) Multi-language scanner** — add per-language parsers behind the existing
-    `ScanResult` contract. More work, no CodeGraph coupling at check time.
+    `ScanResult` contract. More work, re-derives what CodeGraph already parsed; kept only as the
+    fallback if reading the index directly proves impractical.
 - **Deterministic gate-2 (from iter-4 user-test).** Iter-4 gate 2 (seam-signature conformance)
   is LLM-judged: the Inspector reads source and compares to the patch by judgment, so it is the
   one non-deterministic gate. Whichever signature-extraction this iteration builds per language
