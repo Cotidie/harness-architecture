@@ -1,24 +1,26 @@
 # Full-graph drift scan
 
 Date: 2026-06-25
-Trigger: iteration-6 dogfood (`--drift-scan`)
-Scope: whole repo (feature-independent), not a single feature's area.
+Trigger: iteration-6 follow-up (committed `scripts/drift_scan.py`, replacing the ad-hoc scan)
+Command: `python -m scripts.drift_scan src .architecture/boundaries.yaml` (exit 0)
 
-## Check 1: repo-wide boundary self-check
+Declared modules: adapters, application, contracts, domain, shared
+Observed modules: adapters, application, contracts, domain
 
-`python -m src.adapters.boundaries.cli src .architecture/boundaries.yaml`
-Result: **clean, exit 0.** No forbidden edge anywhere in `src/`.
+## Undeclared modules (observed, not in boundaries.yaml)
+- none
 
-## Check 2: undeclared modules / edges
+## Undeclared edges (observed, not in any allow-list)
+- none
 
-Declared modules (`.architecture/boundaries.yaml`): adapters, application, contracts, domain, shared.
-Observed top-level `src/` packages: adapters, application, contracts, domain.
-
-- **Undeclared (observed, not in boundaries.yaml): none.**
-- `shared` is declared but not yet materialized in `src/` (intended-ahead-of-observed). This is
-  intent the code has not reached yet, not harmful drift; left as-is.
+## Unmaterialized modules (declared, no source yet -- info only)
+- shared
 
 ## Verdict
+No accumulated off-path drift. Report only; no auto-fix.
 
-No accumulated off-path drift. Report only; no auto-fix. Resolving any future finding is a
-human/Architect decision.
+The scan is now a committed, unit-tested script (`scripts/drift_scan.py`,
+`tests/test_drift_scan.py`) that checks both modules AND cross-module edges, instead of
+re-improvised python each run. It reuses the boundaries linter's scanner, so it is deterministic
+from source and needs no CodeGraph query. `shared` is declared-but-not-materialized
+(intended-ahead-of-observed), reported as info, not drift.

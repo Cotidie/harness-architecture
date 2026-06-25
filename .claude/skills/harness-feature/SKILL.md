@@ -46,9 +46,10 @@ and `inspector` subagents by name, run the deterministic checks and git yourself
 
 ## The loop
 
-**At loop start (before step 0):** reset the budget meter:
-`mkdir -p .architecture/.budget && echo 0 > .architecture/.budget/query-count`. Every agent
-dispatch below is metered against it (see controls).
+**At loop start (before step 0):** reset both run counters:
+`mkdir -p .architecture/.budget && echo 0 > .architecture/.budget/query-count && echo 0 >
+.architecture/.budget/revise-count`. Every agent dispatch below is metered against the first (see
+controls); the second is the persisted revise-cycle count (step 7).
 
 ### Step 0 (conditional): re-survey
 
@@ -69,17 +70,23 @@ Decide by a logged rule, not intuition:
 
 Run this whenever step 0's cadence fires (code-commit count over threshold, `--resurvey`, or
 `--drift-scan`). It is **feature-independent**: it checks the WHOLE repo, not the feature's area,
-to surface drift that accumulates outside any single feature. Two cheap checks, no new code:
+to surface drift that accumulates outside any single feature. Two committed checks, no ad-hoc
+python:
 
 1. Full linter self-check repo-wide: `python -m src.adapters.boundaries.cli src
    .architecture/boundaries.yaml`; report any forbidden edge anywhere in `src/`.
-2. One `codegraph_explore` query for the module-level edge summary; flag any observed module or
-   cross-module edge NOT represented in `.architecture/boundaries.yaml` (undeclared structural
-   drift).
+2. Module AND edge drift: `python -m scripts.drift_scan src .architecture/boundaries.yaml`. This
+   committed script reuses the linter's scanner to compute the observed module-edge graph and
+   diffs it against `.architecture/boundaries.yaml`: it flags **undeclared modules** (observed,
+   not declared) and **undeclared edges** (an observed module->module import in neither
+   `may_depend_on` nor `may_only_depend_on` of the source). It exits 1 when such drift exists, 0
+   when clean. Forbidden edges and unmaterialized declared modules are reported as info (the
+   linter owns the former; the latter is intended-ahead-of-observed, not drift). No CodeGraph
+   query is needed: the scan is deterministic from source, so it is not metered.
 
-Write a short `.architecture/validation/drift-scan.md` (date, forbidden edges, undeclared
-modules/edges) and surface it. Report only; resolving drift is a human/Architect decision, never
-automatic. This query is metered and freshness-gated like any other.
+Write the script's report to `.architecture/validation/drift-scan.md` (date, trigger, plus the
+script output) and surface it. Report only; resolving drift is a human/Architect decision, never
+automatic.
 
 ### Step 1: Architect -> patch
 
@@ -152,7 +159,11 @@ The Inspector (iter-6 def) does not touch `state.yaml`; the orchestrator owns th
 ### Step 7: on non-ACCEPT, the capped revise loop
 
 On any non-ACCEPT verdict, read the Inspector report's `## Next action` block and route. A run
-may execute **at most 2** revise cycles; track the count.
+may execute **at most 2** revise cycles. Track the count in a run artifact, not working memory:
+at the START of each cycle, increment `.architecture/.budget/revise-count`
+(`n=$(cat .architecture/.budget/revise-count); echo $((n + 1)) > .architecture/.budget/revise-count`)
+and read it back. This survives a mid-loop `/compact` or session drop, so the cap cannot be
+silently exceeded after compaction. If the read value exceeds 2, the cap is reached (see below).
 
 - `NEEDS PATCH REVISION`, or `REJECT: CONTRACT VIOLATION` / `REJECT: DOMAIN MODEL VIOLATION`
   (design-level): dispatch `architect` to revise the patch (re-scope / fix the declared seam),
@@ -163,9 +174,11 @@ may execute **at most 2** revise cycles; track the count.
   dispatch `builder` to fix within the SAME approved patch -> orchestrator gate 1 -> `inspector`.
   No re-approval (the approved patch did not change).
 
-If a cycle reaches ACCEPT, go to step 6. If the cap (2 cycles) is exceeded, STOP and surface the
-latest report with "revise cap reached, human intervention required". The cap prevents ping-pong
-and dead-ends; the unforgeable-approval rule still holds on every patch revision.
+If a cycle reaches ACCEPT, go to step 6. If `.architecture/.budget/revise-count` exceeds 2, STOP
+and surface the latest report with "revise cap reached, human intervention required". The cap
+prevents ping-pong and dead-ends; the unforgeable-approval rule still holds on every patch
+revision. Because the count is read from the artifact (not memory), a `/compact` between cycles
+cannot reset it.
 
 ## Enforced as of iteration 6
 

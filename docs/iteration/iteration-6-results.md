@@ -34,55 +34,40 @@ driving the harness controls, not the boundaries linter.
   its `git diff` fallback (orchestrator supplies the changed-files list). It can no longer
   self-run gate 1 mechanically, not just by prose.
 
+## Fixed in iteration-6 follow-up
+
+### #2 Budget hook -- RESOLVED (hook live + reaches subagents)
+
+Re-tested after restart with the hook live. Both checks passed:
+
+1. **Main session:** reset counter to 0, made ONE `codegraph_explore` call -> `query-count` = 1.
+   The `PreToolUse` project-settings hook is live and counts real explore calls (not mentions).
+2. **Subagent (the primary unknown):** reset to 0, dispatched ONE subagent that made exactly one
+   `codegraph_explore` -> `query-count` = 1. **The hook fires for a SUBAGENT's tool calls, and
+   exactly once** (the subagent reported 2 tool_uses but only the real explore incremented).
+
+Conclusion: hook-based per-agent metering is viable across subagents. The metered delta is the
+metering of record (SKILL.md already says "report the metered counts, not the self-reported
+ones"); the `QUERIES_USED=` self-report (#3) stays as a secondary cross-check, not the authority.
+
+### #4 Drift-scan edge check -- FIXED (committed script, modules AND edges)
+
+Was: edge check unimplemented, scan re-improvised (ad-hoc python) each run. Now: committed
+`scripts/drift_scan.py` (+ `tests/test_drift_scan.py`, 5 tests) reuses the linter's scanner to
+compute the observed module-edge graph and diffs it against `boundaries.yaml` -- flags undeclared
+MODULES and undeclared EDGES, reports forbidden edges (linter's job) and unmaterialized modules as
+info, exits 1 on drift / 0 clean. Deterministic from source, no CodeGraph query, so unmetered.
+SKILL.md step 0b now calls it instead of ad-hoc python; the dogfood run reproduces the prior
+manual result (5 declared / 4 observed, `shared` unmaterialized, no drift).
+
+### #5 Capped-loop counter -- FIXED (persisted, survives /compact)
+
+Was: cycle count lived in orchestrator working memory, so a mid-loop `/compact` could silently
+exceed the 2-cycle cap. Now: the count is reset to 0 at loop start and incremented in
+`.architecture/.budget/revise-count` at the START of each cycle, read back from the artifact. The
+cap check reads the file, not memory, so a compaction between cycles cannot reset it.
+
 ## Remaining issues (NOT yet fixed)
-
-### #2 Budget hook never activated this session (HIGH, environmental) -- RE-TEST AFTER RESTART
-
-After `/reload-plugins` the metered counter stayed 0 even for a MAIN-SESSION `codegraph_explore`,
-so the project `.claude/settings.json` `PreToolUse` hook was not live (`/reload-plugins` reloads
-plugin hooks, not a newly-added project settings hook; it appears to need a full session
-restart and/or hook approval). Consequences:
-
-- live hook enforcement is unproven;
-- the **primary risk -- does a PreToolUse hook fire for a SUBAGENT's tool calls** -- stayed
-  UNTESTED. Metering ran on the self-report fallback (now hardened by #3).
-
-**Re-test procedure (run first thing after restart):**
-
-1. Confirm the hook is loaded: trigger a MAIN-SESSION query and check the counter increments.
-
-   ```sh
-   cd <repo>
-   rm -rf .architecture/.budget
-   # then, from the agent, make ONE codegraph_explore call, then:
-   cat .architecture/.budget/query-count   # expect 1 if the hook is now live
-   ```
-
-2. If main-session counts: dispatch ONE subagent that makes exactly one query (e.g. a trivial
-   `architect` run), then check the counter delta.
-   - delta == 1 -> hooks reach subagents; hook-based enforcement is viable. Wire the orchestrator
-     to trust the metered count over self-report and mark budget metering fully done.
-   - delta == 0 -> hooks do NOT reach subagents; hook-based per-agent enforcement is not viable.
-     Keep the self-report+cross-check fallback (#3) as the metering of record, and record this as
-     a hard constraint for packaging (iter 10): either accept the fallback or move metering into
-     each agent's own wrapper.
-3. Note: the hook is unit-tested standalone and now matches `tool_name` exactly (#1), so a 0 after
-   restart means "does not reach this surface", not "script bug".
-
-### #4 Drift-scan edge check unimplemented + no committed script (MED)
-
-The skill prose promises flagging undeclared MODULES and cross-module EDGES, but the dogfood scan
-only diffed modules, the edge check has no implementation, and the whole scan is re-improvised
-(ad-hoc python) each run. Fix direction: commit a real `drift-scan` script that checks modules
-AND edges (query CodeGraph's module-edge summary, diff against `boundaries.yaml` declared edges),
-or downscope the skill prose to modules-only so it stops overpromising.
-
-### #5 Capped-loop counter is ephemeral (LOW-MED)
-
-"Track the count in the run" = orchestrator working memory. A mid-loop `/compact` or session drop
-loses the cycle count, so the 2-cycle cap can be silently exceeded. Fix direction: persist the
-count in a run artifact (e.g. `.architecture/.budget/revise-count`, or a line in the patch) so it
-survives compaction.
 
 ### #7 Approval pause assumes a human exists (MED, design)
 
@@ -93,9 +78,7 @@ the packaging iteration (iter 10).
 
 ## Suggested sequencing
 
-- #2 re-test: immediately after restart (procedure above). Decides whether hook metering is real
-  or the fallback is permanent.
-- #4, #5: fold into the iteration-6 follow-up / iteration-7 work, or fix opportunistically.
+- #2, #4, #5: DONE in the iteration-6 follow-up (see above).
 - #7: packaging iteration (iter 10), where autonomous install/run is in scope.
 
 ## Branch state at write time
