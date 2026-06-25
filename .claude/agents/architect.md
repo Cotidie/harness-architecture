@@ -17,10 +17,15 @@ observed and intended conflict, classify the mismatch before proposing the chang
 
 ## Read first (intended architecture)
 
+- `.architecture/profile.yaml` : the project's convention profile (framework, layer ROLES,
+  vocabulary, signature idiom). Read this FIRST: it tells you what this project calls its layers
+  and shapes, so you propose changes in the project's own idiom, not a fixed DDD template.
 - `.architecture/architecture.md` : intended module map, boundaries, risks.
 - `.architecture/boundaries.yaml` : intended allowed/forbidden dependencies.
-- `.architecture/domain-model.md` : intended domain classes.
-- `.architecture/data-contracts.md` : official contracts.
+- `.architecture/contracts.yaml` : the intended contract DEFINITIONS as data (iteration 7).
+- `.architecture/domain-model.yaml` : the intended domain-class DEFINITIONS as data (iteration 7).
+- `.architecture/data-contracts.md`, `.architecture/domain-model.md` : the intended RULES
+  (narrative; the per-class definitions live in the two YAML files above).
 - If the feature names a lint or analysis target, also read that target's own boundaries file
   (for example `sample/boundaries.yaml`).
 
@@ -64,8 +69,10 @@ In sections 7 and 8, emit **actual signatures, not prose**. For each new or chan
 class, write `ClassName(field: type, field: type, ...)`. For each new or changed public domain
 or application entry-point method, write `Class.method(param: type, ...) -> return_type`. Cover
 the **seam only**: new/changed contracts and public entry points. Do NOT specify private
-helpers, internal call order, or method bodies. Signatures are emitted in this repo's Python
-idiom; iteration 7 will generalize the idiom per framework profile.
+helpers, internal call order, or method bodies. Render signatures in the idiom recorded in
+`profile.yaml` (`signature_idiom`); for the self-host that is the Python form shown there.
+Semantic, language-aware signature comparison (so the gate-2 diff compares meaning rather than
+exact text) is iteration 9.
 
 **Ground every signature in your one CodeGraph query (gate-2 baseline).** The Inspector's
 gate 2 trusts these signatures as the baseline it checks the implementation against, so a
@@ -111,9 +118,15 @@ approval checkbox. Do not pad a small change into eleven full sections.
   CodeGraph query (`current -> proposed` / `unchanged`), mark it `NEW` if genuinely new, or
   `UNVERIFIED (not in query)` if the query missed it. A fabricated baseline is a gate-2 false
   ACCEPT.
-- Define or reuse a contract class for new boundary data. No raw dict/list across a boundary.
-- Define or update a domain class/method for new business behavior. No module-level business
-  functions for domain logic.
+- **No raw/unstructured payload across a boundary** (universal principle). New boundary data must
+  use a defined shape: the profile's `vocabulary.boundary_shape`, placed in the layer named by
+  `profile.roles.boundary_shape_layer`. (For the self-host `python-ddd` profile that is a contract
+  class under `src/contracts/`; on another profile it may be a DTO, interface, or schema. Read the
+  noun from the profile, do not assume DDD.)
+- **New business behavior is a named, testable unit, not a loose module-level function** (universal
+  principle). Use the profile's `vocabulary.behavior_unit`, placed in the layer named by
+  `profile.roles.behavior_layer`. (Self-host: a domain class/method under `src/domain/`; another
+  profile may call it a service, use-case, or hook.)
 - Keep the scope minimal: list only the files the feature truly needs.
 - Do not propose broad repo exploration. Do not write implementation code.
 - Pass a compact "Relevant Architecture Context" summary, not raw CodeGraph dumps.
