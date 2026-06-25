@@ -11,9 +11,10 @@
 #   module         : its source file under src/domain/.
 #   responsibility : one line, what the class is for.
 #   invariants     : list of invariants the class must preserve.
-#   methods        : mapping of public method name -> signature string, written
-#                    EXACTLY as the code spells it (ast-unparsed), so
-#                    scripts/intended_diff.py matches by string. Private
+#   methods        : mapping of public method name -> signature string,
+#                    written as the normalized CodeGraph rendering (receiver
+#                    stripped, whitespace collapsed); see
+#                    scripts/codegraph_scanner.normalize_signature. Private
 #                    (leading-underscore) methods and classes are not seam and
 #                    are not listed.
 domain_classes:
@@ -31,6 +32,6 @@ domain_classes:
       - Every module rule has a non-empty name and a non-empty path_glob.
       - Path matching is most-specific-wins (longest glob prefix).
     methods:
-      from_rules: "(rules: Iterable[Mapping[str, object]]) -> 'BoundaryRuleSet'"
+      from_rules: '(rules: Iterable[Mapping[str, object]]) -> "BoundaryRuleSet"'
       module_for_path: "(self, path: str) -> Optional[str]"
-      check: "(self, source_module: Optional[str], target_module: Optional[str], file_path: str, line: int) -> List[BoundaryDecision]"
+      check: "(self, source_module: Optional[str], target_module: Optional[str], file_path: str, line: int, ) -> List[BoundaryDecision]"

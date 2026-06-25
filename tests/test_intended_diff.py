@@ -6,6 +6,9 @@ import unittest
 
 from scripts.intended_diff import compute_diff, _observed_domain
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REAL_DB = os.path.join(REPO_ROOT, ".codegraph", "codegraph.db")
+
 
 @contextlib.contextmanager
 def _tree(files):
@@ -122,17 +125,18 @@ class IntendedDiffTest(unittest.TestCase):
         self.assertEqual(report.field_mismatches, ())
         self.assertEqual(report.undeclared_contracts, ())
 
+    @unittest.skipUnless(os.path.isfile(_REAL_DB), "no real .codegraph index")
     def test_real_repo_is_aligned(self):
         # The committed repo: src + the two committed YAMLs must be ALIGNED.
-        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Uses the default CodeGraph observer because domain-model.yaml is now
+        # curated to the normalized CodeGraph rendering, not the AST rendering.
         cwd = os.getcwd()
-        os.chdir(repo)
+        os.chdir(REPO_ROOT)
         try:
             report = compute_diff(
                 "src",
                 ".architecture/contracts.yaml",
                 ".architecture/domain-model.yaml",
-                observe_domain_fn=_observed_domain,
             )
         finally:
             os.chdir(cwd)
