@@ -5,13 +5,15 @@ import textwrap
 import unittest
 
 from scripts.harness_check import aggregate_exit, compute_results
+from scripts.intended_diff import _observed_domain
 from src.adapters.boundaries.python_import_scanner import scan_imports
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Temp trees are not CodeGraph-indexed, so the aggregation-logic tests inject the
-# `ast` scanner. The CodeGraph-backed path is covered by test_real_repo_all_clean
-# and tests/test_codegraph_scanner.py.
+# Temp trees are not CodeGraph-indexed, so the aggregation-logic tests inject
+# the `ast` scanner (scan_fn) and the `ast` domain observer (observe_domain_fn).
+# The CodeGraph-backed paths are covered by test_real_repo_all_clean and
+# tests/test_codegraph_scanner.py.
 
 
 @contextlib.contextmanager
@@ -90,13 +92,17 @@ class HarnessCheckTest(unittest.TestCase):
 
     def test_clean_temp_tree_exit_0(self):
         with _tree(_harness_files()) as root:
-            results = compute_results(root, scan_fn=scan_imports)
+            results = compute_results(
+                root, scan_fn=scan_imports, observe_domain_fn=_observed_domain
+            )
         self.assertEqual(aggregate_exit(results), 0, results)
 
     def test_forbidden_edge_makes_linter_drift(self):
         overrides = {"src/domain/core.py": "import src.adapters.io\n"}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root, scan_fn=scan_imports)
+            results = compute_results(
+                root, scan_fn=scan_imports, observe_domain_fn=_observed_domain
+            )
         self.assertEqual(aggregate_exit(results), 1, results)
         linter = _by_name(results, "boundaries")
         self.assertEqual(linter.status, "drift")
@@ -116,7 +122,9 @@ class HarnessCheckTest(unittest.TestCase):
         )
         overrides = {".architecture/contracts.yaml": bad_contracts}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root, scan_fn=scan_imports)
+            results = compute_results(
+                root, scan_fn=scan_imports, observe_domain_fn=_observed_domain
+            )
         self.assertEqual(aggregate_exit(results), 1, results)
         diff = _by_name(results, "intended_diff")
         self.assertEqual(diff.status, "drift")
@@ -149,16 +157,32 @@ class HarnessCheckTest(unittest.TestCase):
         )
         overrides = {".architecture/contracts.yaml": bad_contracts}
         with _tree(_harness_files(overrides=overrides)) as root:
-            results = compute_results(root, only={"boundaries"}, scan_fn=scan_imports)
+            results = compute_results(
+                root,
+                only={"boundaries"},
+                scan_fn=scan_imports,
+                observe_domain_fn=_observed_domain,
+            )
         self.assertEqual([r.name for r in results], ["boundaries"])
         self.assertEqual(aggregate_exit(results), 0, results)
 
     def test_profile_driven_non_src_layout(self):
         # source_root = app, not src: the checks must target app/ and be clean.
         with _tree(_harness_files(layer="app")) as root:
-            results = compute_results(root, scan_fn=scan_imports)
+            results = compute_results(
+                root, scan_fn=scan_imports, observe_domain_fn=_observed_domain
+            )
         self.assertEqual(aggregate_exit(results), 0, results)
         self.assertTrue(all(r.status == "clean" for r in results), results)
+
+    def test_temp_tree_intended_diff_uses_injected_domain_observer(self):
+        with _tree(_harness_files()) as root:
+            results = compute_results(
+                root, scan_fn=scan_imports, observe_domain_fn=_observed_domain
+            )
+        diff = _by_name(results, "intended_diff")
+        self.assertIn(diff.status, ("clean", "drift"))
+        self.assertNotEqual(diff.status, "error", diff)
 
 
 if __name__ == "__main__":

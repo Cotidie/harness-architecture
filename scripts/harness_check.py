@@ -98,12 +98,18 @@ CHECK_NAMES = ("boundaries", "drift_scan", "intended_diff")
 
 
 def compute_results(
-    repo_root: str = ".", only: Optional[Set[str]] = None, scan_fn=_codegraph_scan
+    repo_root: str = ".",
+    only: Optional[Set[str]] = None,
+    scan_fn=_codegraph_scan,
+    observe_domain_fn=None,
 ) -> List[CheckResult]:
     # `scan_fn(target_dir, rule_set) -> ScanResult` is the observed-edge source.
     # Default is the CodeGraph scanner (polyglot, production). Tests of the
     # aggregation logic inject the `ast` scanner so they can run on un-indexed
     # temp trees.
+    # `observe_domain_fn(domain_dir) -> Dict[str, Dict[str, str]]` is the
+    # domain-signature source. When None, compute_diff uses its CodeGraph
+    # default. Tests inject _observed_domain (ast) for un-indexed temp trees.
     # Resolve once; a profile/path failure means no check can run.
     prev = os.getcwd()
     abs_root = os.path.abspath(repo_root)
@@ -127,8 +133,11 @@ def compute_results(
             return ("drift" if report.has_drift else "clean"), format_drift(report)
 
         def _intended():
+            kwargs = {}
+            if observe_domain_fn is not None:
+                kwargs["observe_domain_fn"] = observe_domain_fn
             report = compute_diff(
-                paths.source_dir, paths.contracts, paths.domain_model
+                paths.source_dir, paths.contracts, paths.domain_model, **kwargs
             )
             return ("drift" if report.has_drift else "clean"), format_diff(report)
 
