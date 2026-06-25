@@ -404,5 +404,96 @@ class FormatFlagTests(unittest.TestCase):
         self.assertEqual(len(json.loads(out.getvalue())), 1)
 
 
+class QuietFlagTests(unittest.TestCase):
+    """CLI --quiet suppresses the clean-run message only; exit codes unchanged."""
+
+    def _clean_tree(self, tmp):
+        domain = os.path.join(tmp, "pkg", "domain")
+        os.makedirs(domain)
+        with open(os.path.join(domain, "ok.py"), "w") as handle:
+            handle.write("x = 1\n")
+        cfg = os.path.join(tmp, "boundaries.yaml")
+        with open(cfg, "w", encoding="utf-8") as handle:
+            handle.write(_BOUNDARIES_YAML)
+        return cfg
+
+    def _main_on_sample(self, *extra):
+        cwd = os.getcwd()
+        os.chdir(REPO_ROOT)
+        try:
+            with _capture() as (out, err):
+                code = cli.main(["sample", "sample/boundaries.yaml", *extra])
+        finally:
+            os.chdir(cwd)
+        return code, out, err
+
+    def test_clean_run_with_quiet_prints_nothing_exit_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._clean_tree(tmp)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(["pkg", "boundaries.yaml", "--quiet"])
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_clean_run_without_quiet_still_prints_message_exit_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._clean_tree(tmp)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(["pkg", "boundaries.yaml"])
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertIn("No boundary violations found.", out.getvalue())
+
+    def test_violations_with_quiet_output_identical_exit_1(self):
+        quiet_code, quiet_out, _ = self._main_on_sample("--quiet")
+        plain_code, plain_out, _ = self._main_on_sample()
+        self.assertEqual(quiet_code, 1)
+        self.assertEqual(plain_code, 1)
+        self.assertEqual(quiet_out.getvalue(), plain_out.getvalue())
+
+    def test_quiet_composes_with_format_json_clean_prints_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._clean_tree(tmp)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(
+                        ["pkg", "boundaries.yaml", "--format", "json", "--quiet"]
+                    )
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_quiet_composes_with_format_json_violations_unchanged(self):
+        quiet_code, quiet_out, _ = self._main_on_sample("--format", "json", "--quiet")
+        plain_code, plain_out, _ = self._main_on_sample("--format", "json")
+        self.assertEqual(quiet_code, 1)
+        self.assertEqual(plain_code, 1)
+        self.assertEqual(quiet_out.getvalue(), plain_out.getvalue())
+
+    def test_quiet_does_not_suppress_could_not_run_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = os.path.join(tmp, "empty")
+            os.makedirs(empty)
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            with _capture() as (out, err):
+                code = cli.main([empty, cfg, "--quiet"])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
