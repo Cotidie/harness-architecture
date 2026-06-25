@@ -40,9 +40,11 @@ and `inspector` subagents by name, run the deterministic checks and git yourself
 Decide by a logged rule, not intuition:
 
 1. Read `state.yaml.last_reconciled_commit`.
-2. `git rev-list --count <sha>..HEAD` = commits since last reconcile.
-3. Re-survey (dispatch `surveyor`) only if: the count exceeds **8**, OR `--resurvey` was passed,
-   OR the Architect (step 1) reports broad `UNCLEAR_DRIFT` beyond the feature's area.
+2. `git rev-list --count <sha>..HEAD -- src/` = commits since last reconcile **that touched code**.
+   Count code commits only: doc, agent-def, and skill commits do not change observed
+   architecture, so counting all commits over-triggers a re-survey in a doc-heavy interim.
+3. Re-survey (dispatch `surveyor`) only if: the code-commit count exceeds **8**, OR `--resurvey`
+   was passed, OR the Architect (step 1) reports broad `UNCLEAR_DRIFT` beyond the feature's area.
 4. `--no-survey` forces skip. Default is **skip** (re-surveying every feature blows the budget).
 5. If it runs: announce it, record the reason in `state.yaml` (e.g. `re-surveyed: 12 commits
    since last`). A re-survey rewrites the intended docs, so treat it as a reviewable doc change,
@@ -103,13 +105,19 @@ orchestrator owns it.)
 If the verdict is `ACCEPT` or `ACCEPT WITH DOC UPDATE`:
 
 1. Apply any approved doc update.
-2. `git add` code + tests + `.architecture/` (patch, report, any docs).
-3. Commit with a clear message.
-4. `git rev-parse HEAD` -> the SHA.
+2. `git add` code + tests + `.architecture/` (patch, report, any docs) but NOT `state.yaml` yet.
+3. Commit with a clear message. This is the **feature commit**.
+4. `git rev-parse HEAD` -> the feature SHA.
 5. Write that SHA into `state.yaml` (`last_validated_commit`, `last_reconciled_commit`,
-   `last_validation_time`, the decision), then `git commit --amend --no-edit` so state ships in
-   the same commit.
-6. Report the SHA.
+   `last_validation_time`, the decision), then commit `state.yaml` as a **separate trailing
+   commit** ("chore: sync harness state to <sha>"). Do NOT `--amend`: amending rewrites the
+   commit SHA, so a commit can never contain its own final SHA. State trails by one commit and
+   names the feature commit whose code it validated.
+6. Report the feature SHA.
+
+Note: the Inspector (iter-4 def) may also bump `state.yaml` on ACCEPT, to the pre-feature HEAD.
+Under this orchestrator the orchestrator owns state, so overwrite the Inspector's bump with the
+feature SHA in step 5. (Follow-up for iter 5b: stop the Inspector self-bumping under orchestration.)
 
 On any non-ACCEPT verdict (`NEEDS PATCH REVISION` / any `REJECT`): STOP, surface the report, and
 await the human. Do NOT auto-loop (the capped revise loop is deferred, see below).

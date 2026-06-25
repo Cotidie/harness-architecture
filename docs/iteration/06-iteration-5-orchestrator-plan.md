@@ -114,7 +114,7 @@ description: Drive one feature through the Living Architecture loop - conditiona
 2. `.claude/skills/harness-feature/SKILL.md` exists with all six steps, the partial-entry args, and the deferred-features note (which does NOT list grounded signatures).
 3. Running the loop pauses after the Architect's patch and provably does not proceed without a human turn (no Builder dispatch, no ticked checkbox in that turn).
 4. After approval, the orchestrator runs gate 1 itself (its own test + self-check + scope output is shown), then the Inspector returns gate 2 + verdict against the grounded baseline.
-5. On ACCEPT, one commit lands with code + artifacts + bumped `state.yaml`; the reported SHA matches HEAD; tests pass.
+5. On ACCEPT, a feature commit lands with code + artifacts, then a trailing `state.yaml` commit names it (not `--amend`: a commit cannot contain its own SHA, see Results finding 3); tests pass.
 6. A forced gate-1 failure stops the loop with no commit.
 
 ## Feedback to collect (feeds iter 5b / 6 / 7)
@@ -132,3 +132,51 @@ description: Drive one feature through the Living Architecture loop - conditiona
 - Budget metering by actual tool calls (still self-reported this slice).
 - REJECT -> auto-revise loop with a max-iteration cap (this slice stops and asks the human).
 - Trimming the Inspector's redundant gate-1 now that the orchestrator owns it.
+
+---
+
+## Results (executed 2026-06-25)
+
+Built Task 1 (Architect grounding), Tasks 2-3 (the `harness-feature` skill), then dogfooded the
+full loop inline (skill not yet reload-registered; the `architect`/`builder`/`inspector` agents
+dispatch by name) on the feature `--format json` for the boundaries linter CLI.
+
+**Loop outcome: ACCEPT.** Feature shipped at commit `bbf88f7`; harness state trails at `a6999be`.
+
+- **Step 0 (survey):** skipped. See finding 1.
+- **Step 1 (Architect):** ALIGNED, 1 CodeGraph query. Seam block fully grounded: existing seams
+  (`BoundaryViolation`, `format_report`, `format_violation`, `main`) marked `unchanged`, `run`
+  shown `current -> proposed` (added `output_format="text"`), `format_report_json` marked `NEW`.
+  No `UNVERIFIED`. The grounding rule held on the first real run.
+- **Step 2 (approval pause):** held. The patch was presented and the turn ended; the Builder was
+  not dispatched and the checkbox was not ticked until a separate human "approve" turn. The
+  unforgeable-approval control worked as designed.
+- **Step 4 (gate 1, orchestrator-run):** verified independently, not from the Builder's report:
+  70 tests OK, self-check exit 0, changed files exactly the 4 patch-allowed files.
+- **Step 5 (gate 2, Inspector):** ACCEPT, 1 query, all six seams matched the grounded baseline;
+  design checks passed.
+- **Step 6 (auto-commit):** feature + artifacts committed; state synced in a trailing commit.
+- **Non-ACCEPT probe:** a scratch `domain -> contracts` edge made gate 1 exit 1
+  (`REJECT: ARCHITECTURE VIOLATION`); nothing was committed; scratch reverted, tree clean.
+- **Functional smoke:** `... sample sample/boundaries.yaml --format json` emits a valid JSON array
+  and exits 1 on the planted violation; default/text path unchanged.
+
+### Findings (feed iter 5b / 6)
+
+1. **Step-0 staleness rule over-counts (fixed in the skill).** `git rev-list --count <sha>..HEAD`
+   returned 9 (> threshold 8) and would have forced a re-survey, but all 9 commits were
+   docs/agent-defs/skill, zero `src/` changes, so there was no observed-architecture drift to
+   re-survey. Fixed: the rule now counts code commits only (`... -- src/`).
+2. **Inspector self-bumps state to the wrong SHA under orchestration (fixed via override, design
+   follow-up for 5b).** The Inspector (iter-4 behavior) bumped `state.yaml` to the pre-feature
+   HEAD on ACCEPT. Under the orchestrator the orchestrator owns state, so this targets the wrong
+   commit. Worked around by overwriting in step 5; the clean fix is to stop the Inspector
+   self-bumping when run under the orchestrator (pair with trimming its redundant gate-1).
+3. **`--amend`-to-embed-the-SHA is impossible (fixed in the skill).** The original step 6 wrote
+   the SHA into `state.yaml` then `git commit --amend`; amending rewrites the commit SHA, so the
+   stored SHA is immediately stale (a commit cannot contain its own final SHA). Fixed: state is
+   recorded in a **separate trailing commit** that names the feature commit it validated.
+
+All three are control/plumbing issues, not failures of the core loop: reconcile -> grounded
+patch -> unforgeable approval -> scoped build -> orchestrator gate 1 -> Inspector gate 2 ->
+accept all behaved correctly.
