@@ -2,7 +2,8 @@
 #
 # Domain classes hold business behavior and own their invariants (src/domain/).
 # This file is the curated definition layer for the KEY domain classes worth
-# preserving (not every class); the intended RULES live in domain-model.md.
+# preserving (not every class, not private impl details); the intended RULES
+# live in domain-model.md.
 #
 # Schema per entry:
 #   name           : the domain class name.
@@ -11,12 +12,25 @@
 #   responsibility : one line, what the class is for.
 #   invariants     : list of invariants the class must preserve.
 #   methods        : mapping of public method name -> signature string, written
-#                    EXACTLY as the code spells it, so scripts/intended_diff.py
-#                    matches by string. Private (leading-underscore) methods are
-#                    not part of the seam and are not listed.
-#
-# Self-host has no domain classes yet (the boundaries linter is
-# adapters/application/contracts only), so this list is intentionally empty. The
-# schema above is proven by the empty-but-valid file; the diff is exercised by
-# unit test until a feature introduces a real domain class.
-domain_classes: []
+#                    EXACTLY as the code spells it (ast-unparsed), so
+#                    scripts/intended_diff.py matches by string. Private
+#                    (leading-underscore) methods and classes are not seam and
+#                    are not listed.
+domain_classes:
+  - name: BoundaryRuleSet
+    layer: domain
+    module: src/domain/boundaries/boundary_rule_set.py
+    responsibility: >
+      The boundary-policy domain object: from a set of module rules it decides
+      which module a path belongs to and whether a source->target import
+      violates the declared may/must_not/may_only dependency rules.
+    invariants:
+      - Frozen value object; rules are immutable once constructed.
+      - A rule set needs at least one module (from_rules rejects empty input).
+      - Module names are unique; a duplicate name is rejected at construction.
+      - Every module rule has a non-empty name and a non-empty path_glob.
+      - Path matching is most-specific-wins (longest glob prefix).
+    methods:
+      from_rules: "(rules: Iterable[Mapping[str, object]]) -> 'BoundaryRuleSet'"
+      module_for_path: "(self, path: str) -> Optional[str]"
+      check: "(self, source_module: Optional[str], target_module: Optional[str], file_path: str, line: int) -> List[BoundaryDecision]"

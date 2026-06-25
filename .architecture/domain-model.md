@@ -7,9 +7,9 @@ exists; this file records what should be preserved.
 Per-class definitions (key domain classes, their responsibilities, invariants,
 and public method signatures) live in `domain-model.yaml` as structured data,
 diffed against the code by `scripts/intended_diff.py`. This file states the
-intended **rules** only. No domain classes exist yet, so `domain-model.yaml` is
-empty; when business behavior appears it must take the shape of a domain class
-or method under `src/domain/`, not a module-level function.
+intended **rules** only. The curated key domain class is `BoundaryRuleSet` (the
+boundary-policy object); new business behavior must take the shape of a domain
+class or method under `src/domain/`, not a module-level function.
 
 ## Invariants to preserve
 
