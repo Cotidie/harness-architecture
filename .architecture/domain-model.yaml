@@ -1,0 +1,22 @@
+# Intended domain classes as structured data (iteration 7).
+#
+# Domain classes hold business behavior and own their invariants (src/domain/).
+# This file is the curated definition layer for the KEY domain classes worth
+# preserving (not every class); the intended RULES live in domain-model.md.
+#
+# Schema per entry:
+#   name           : the domain class name.
+#   layer          : the architecture layer (domain).
+#   module         : its source file under src/domain/.
+#   responsibility : one line, what the class is for.
+#   invariants     : list of invariants the class must preserve.
+#   methods        : mapping of public method name -> signature string, written
+#                    EXACTLY as the code spells it, so scripts/intended_diff.py
+#                    matches by string. Private (leading-underscore) methods are
+#                    not part of the seam and are not listed.
+#
+# Self-host has no domain classes yet (the boundaries linter is
+# adapters/application/contracts only), so this list is intentionally empty. The
+# schema above is proven by the empty-but-valid file; the diff is exercised by
+# unit test until a feature introduces a real domain class.
+domain_classes: []

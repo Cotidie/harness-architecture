@@ -1,0 +1,54 @@
+# Intended data contracts as structured data (iteration 7).
+#
+# Contract classes are the stable, boundary-crossing payload shapes (frozen
+# dataclasses under src/contracts/, no behavior). This file is the curated
+# definition layer; the intended RULES live in data-contracts.md.
+#
+# Schema per entry:
+#   name      : the contract class name.
+#   layer     : the architecture layer it belongs to (contracts).
+#   module    : its source file under src/contracts/.
+#   crosses   : the boundary this payload crosses (prose).
+#   fields    : mapping of field name -> type annotation, written EXACTLY as the
+#               code spells it (e.g. "Tuple[str, ...]"), so the deterministic
+#               diff in scripts/intended_diff.py matches by string.
+#   notes     : optional; accepted-value expansions etc. that are not new fields.
+contracts:
+  - name: ModuleRule
+    layer: contracts
+    module: src/contracts/boundaries/module_rule.py
+    crosses: "loader -> application (one module entry loaded from boundaries.yaml)"
+    fields:
+      name: str
+      path_glob: str
+      may_depend_on: "Tuple[str, ...]"
+      must_not_depend_on: "Tuple[str, ...]"
+      may_only_depend_on: "Tuple[str, ...]"
+    notes: >
+      may_only_depend_on is an optional opt-in allowlist defaulting to an empty
+      tuple; an absent or empty value leaves behavior unchanged.
+
+  - name: ImportEdge
+    layer: contracts
+    module: src/contracts/boundaries/import_edge.py
+    crosses: "scanner -> application (one resolved module-level import)"
+    fields:
+      source_module: str
+      imported_module: str
+      file_path: str
+      line: int
+
+  - name: BoundaryViolation
+    layer: contracts
+    module: src/contracts/boundaries/boundary_violation.py
+    crosses: "application -> reporter (one reported finding); also scanner -> application -> reporter for parse failures"
+    fields:
+      source_module: str
+      target_module: str
+      rule_kind: str
+      file_path: str
+      line: int
+    notes: >
+      rule_kind value set: "must_not_depend_on", "may_only_depend_on",
+      "parse_error". These expand the accepted value space of an existing field;
+      they add no new field and no new class.
