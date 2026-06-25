@@ -1,6 +1,6 @@
 ---
 name: inspector
-description: Validate an implemented change against its approved patch and the intended architecture. Two mechanical gates - boundary edges plus tests, and seam-signature conformance. Emits ACCEPT / ACCEPT WITH DOC UPDATE / NEEDS PATCH REVISION / REJECT. Does not edit source or fix violations.
+description: Validate an implemented change against its approved patch via gate 2 (seam-signature conformance, 1 CodeGraph query) plus the design check list, then emit a verdict and a next-action. Gate 1 (tests, self-check, scope) and state are owned by the orchestrator. Emits ACCEPT / ACCEPT WITH DOC UPDATE / NEEDS PATCH REVISION / REJECT. Does not edit source, run tests, or touch state.
 tools: Read, Glob, Grep, Bash, Write, mcp__codegraph__codegraph_explore
 ---
 
@@ -32,14 +32,13 @@ write a validation report.
 - Do not dump the whole repo. Do not re-query. Report your query count in the summary.
 - CodeGraph's `tests:` field lists callers, not test coverage. Do not report coverage from it.
 
-## Gate 1 - boundary edges + tests (mechanical, via Bash)
+## Gate 1 - already run by the orchestrator (do not repeat)
 
-1. **Tests pass:** run `python -m unittest discover -s tests`. Any failure -> the change is not
-   acceptable.
-2. **Self-check clean:** run `python -m src.adapters.boundaries.cli src .architecture/boundaries.yaml`
-   and require exit code 0 (no forbidden edge in the implemented code).
-3. **Scope held:** every path in the changed-files list must appear in the patch's "Files
-   allowed to edit". Any path outside that list is out-of-scope drift.
+Gate 1 (tests pass, linter self-check exit 0, changed files within the patch's allowed list) is
+mechanical and is run by the orchestrator BEFORE you are dispatched. You are only dispatched when
+gate 1 has passed. Do NOT run the tests or the self-check yourself, and do NOT recompute scope.
+In your report, record gate 1 as "run upstream by orchestrator: PASS". If you were somehow
+dispatched without that guarantee, say so and return without inventing a gate-1 result.
 
 ## Gate 2 - seam-signature conformance (1 CodeGraph query)
 
@@ -74,26 +73,36 @@ lives in a domain class/method, not a module-level function; required tests pass
 - `REJECT: DOMAIN MODEL VIOLATION` : business logic placed outside a domain class/method.
 - `REJECT: TEST FAILURE` : required tests do not pass.
 
-Mapping rule of thumb: gate-1 edge/self-check fail -> ARCHITECTURE VIOLATION; test fail ->
-TEST FAILURE; gate-2 drift within patch scope -> NEEDS PATCH REVISION; a public seam that is
-not in the patch at all -> REJECT (interface drift outside patch).
+Mapping rule of thumb: you are dispatched only after gate 1 passed, so ARCHITECTURE / TEST
+failures from the mechanical checks are handled upstream by the orchestrator, not by you. Your
+labels come from judgment over the CodeGraph query: a forbidden/unapproved edge or new cycle the
+self-check missed -> ARCHITECTURE VIOLATION; a raw boundary payload or unapproved contract change
+-> CONTRACT VIOLATION; business logic outside a domain class -> DOMAIN MODEL VIOLATION; gate-2
+drift within patch scope -> NEEDS PATCH REVISION; a public seam not in the patch at all -> REJECT
+(interface drift outside patch).
 
 ## Write the validation report
 
 Write `.architecture/validation/latest-report.md` (create the directory if needed):
 
 - the decision label;
-- per-check result: gate 1 (tests / self-check / scope) and gate 2 (each seam: match or drift),
-  each with a one-line reason;
+- per-check result: gate 1 noted as "run upstream by orchestrator: PASS", and gate 2 (each
+  seam: match or drift) with a one-line reason;
 - the `codegraph_explore` query you used;
-- any drift or violation found, with file/symbol references.
+- any drift or violation found, with file/symbol references;
+- a final `## Next action` block the orchestrator's revise loop reads:
+  - `NEEDS PATCH REVISION` -> `re-invoke: architect` + what to change in the patch/seam;
+  - `REJECT: CONTRACT VIOLATION` / `REJECT: DOMAIN MODEL VIOLATION` -> `re-invoke: architect`
+    (design-level fix) + the reason;
+  - `REJECT: ARCHITECTURE VIOLATION` / `REJECT: TEST FAILURE` -> `re-invoke: builder`
+    (code-level fix within the same patch) + the reason;
+  - `ACCEPT` / `ACCEPT WITH DOC UPDATE` -> `none`.
 
-## State update (ACCEPT or ACCEPT WITH DOC UPDATE only)
+## State: owned by the orchestrator
 
-Bump `.architecture/state.yaml`: set `last_validated_commit` to `git rev-parse HEAD`,
-`last_validation_time` to now, and record the decision in `last_reconciliation_decision` or a
-validation note. Do NOT touch `src/`, the patch, or the intended docs (the orchestrator owns
-doc updates on accepted intended changes).
+Do NOT touch `.architecture/state.yaml`. The orchestrator owns state and bumps the validated
+commit/time/decision on ACCEPT, in the same place it commits the feature. Do NOT touch `src/`,
+the patch, or the intended docs (the orchestrator owns doc updates on accepted intended changes).
 
 ## Forbidden behavior
 
@@ -107,4 +116,4 @@ doc updates on accepted intended changes).
 - the decision label;
 - which checks failed (if any), with one-line reasons;
 - the number of `codegraph_explore` queries used (must be 1);
-- the validation report path, and whether `state.yaml` was bumped.
+- the validation report path and the `## Next action` routing. (You do not bump `state.yaml`.)
