@@ -4,7 +4,7 @@ import tempfile
 import textwrap
 import unittest
 
-from scripts.intended_diff import compute_diff
+from scripts.intended_diff import compute_diff, _observed_domain
 
 
 @contextlib.contextmanager
@@ -66,9 +66,57 @@ def _base_files(extra=None):
 
 
 class IntendedDiffTest(unittest.TestCase):
+    def _files(self, domain_method_sig="(self, path: str) -> Optional[str]"):
+        """Build a file dict with a domain class whose method has the given sig."""
+        domain_src = textwrap.dedent(
+            """\
+            from typing import Optional
+
+
+            class Router:
+                def module_for_path%s:
+                    return None
+            """
+        ) % domain_method_sig
+        domain_yaml = textwrap.dedent(
+            """\
+            domain_classes:
+              - name: Router
+                layer: domain
+                module: src/domain/router.py
+                responsibility: "route paths"
+                invariants: []
+                methods:
+                  module_for_path: "(path: str) -> Optional[str]"
+            """
+        )
+        return _base_files(
+            {
+                "src/domain/__init__.py": "",
+                "src/domain/router.py": domain_src,
+                "domain-model.yaml": domain_yaml,
+            }
+        )
+
+    def test_domain_observer_seam_flags_signature_drift(self):
+        # declared says module_for_path takes (path: str); code says (path: int) -> drift
+        with _tree(self._files(domain_method_sig="(self, path: int) -> Optional[str]")):
+            report = compute_diff(
+                "src",
+                "contracts.yaml",
+                "domain-model.yaml",
+                observe_domain_fn=_observed_domain,
+            )
+        self.assertTrue(report.has_drift)
+        self.assertTrue(
+            any("module_for_path" in m for m in report.signature_mismatches),
+            report.signature_mismatches,
+        )
+
     def test_aligned_repo_has_no_drift(self):
         with _tree(_base_files()):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertFalse(report.has_drift)
         self.assertEqual(report.missing_classes, ())
         self.assertEqual(report.field_mismatches, ())
@@ -84,6 +132,7 @@ class IntendedDiffTest(unittest.TestCase):
                 "src",
                 ".architecture/contracts.yaml",
                 ".architecture/domain-model.yaml",
+                observe_domain_fn=_observed_domain,
             )
         finally:
             os.chdir(cwd)
@@ -92,14 +141,16 @@ class IntendedDiffTest(unittest.TestCase):
     def test_renamed_field_is_drift(self):
         yaml_renamed = CONTRACTS_YAML.replace("path_glob: str", "path_glob_X: str")
         with _tree(_base_files({"contracts.yaml": yaml_renamed})):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertTrue(report.field_mismatches)
 
     def test_changed_type_is_drift(self):
         yaml_typed = CONTRACTS_YAML.replace("name: str", "name: int")
         with _tree(_base_files({"contracts.yaml": yaml_typed})):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertTrue(report.field_mismatches)
 
@@ -115,7 +166,8 @@ class IntendedDiffTest(unittest.TestCase):
             "      a: str\n"
         )
         with _tree(_base_files({"contracts.yaml": yaml_extra})):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertIn("GhostContract", report.missing_classes)
 
@@ -131,7 +183,8 @@ class IntendedDiffTest(unittest.TestCase):
             """
         )
         with _tree(_base_files({"src/contracts/x.py": extra_src})):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertIn("ExtraContract", report.undeclared_contracts)
 
@@ -139,13 +192,15 @@ class IntendedDiffTest(unittest.TestCase):
         # Code adds a field the YAML does not declare: strict, so drift.
         src_extra_field = CONTRACT_SRC + "    extra_field: int\n"
         with _tree(_base_files({"src/contracts/x.py": src_extra_field})):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertTrue(report.field_mismatches)
 
     def test_empty_domain_is_aligned(self):
         with _tree(_base_files()):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertEqual(report.signature_mismatches, ())
         self.assertFalse(report.has_drift)
 
@@ -177,7 +232,8 @@ class IntendedDiffTest(unittest.TestCase):
             }
         )
         with _tree(files):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertTrue(report.has_drift)
         self.assertTrue(report.signature_mismatches)
 
@@ -198,7 +254,8 @@ class IntendedDiffTest(unittest.TestCase):
             }
         )
         with _tree(files):
-            report = compute_diff("src", "contracts.yaml", "domain-model.yaml")
+            report = compute_diff("src", "contracts.yaml", "domain-model.yaml",
+                                  observe_domain_fn=_observed_domain)
         self.assertFalse(report.has_drift)
         self.assertIn("HelperPolicy", report.info_only)
 

@@ -30,9 +30,11 @@ import ast
 import os
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import yaml
+
+from scripts.codegraph_scanner import normalize_signature, observed_domain_from_index
 
 
 @dataclass(frozen=True)
@@ -148,7 +150,7 @@ def _observed_domain(domain_dir: str) -> Dict[str, Dict[str, str]]:
                     if isinstance(
                         stmt, (ast.FunctionDef, ast.AsyncFunctionDef)
                     ) and not stmt.name.startswith("_"):
-                        methods[stmt.name] = _format_signature(stmt)
+                        methods[stmt.name] = normalize_signature(_format_signature(stmt))
                 observed[node.name] = methods
     return observed
 
@@ -166,8 +168,15 @@ def _load_yaml_list(path: str, key: str) -> List[dict]:
     return entries
 
 
+def _default_domain_observer(domain_dir: str) -> Dict[str, Dict[str, str]]:
+    return observed_domain_from_index(domain_dir)
+
+
 def compute_diff(
-    target_dir: str, contracts_file: str, domain_file: str
+    target_dir: str,
+    contracts_file: str,
+    domain_file: str,
+    observe_domain_fn: Callable[[str], Dict[str, Dict[str, str]]] = _default_domain_observer,
 ) -> DiffReport:
     contracts_dir = os.path.join(target_dir, "contracts")
     domain_dir = os.path.join(target_dir, "domain")
@@ -176,7 +185,7 @@ def compute_diff(
     declared_domain = _load_yaml_list(domain_file, "domain_classes")
 
     observed_contracts = _observed_contracts(contracts_dir)
-    observed_domain = _observed_domain(domain_dir)
+    observed_domain = observe_domain_fn(domain_dir)
 
     missing_classes: List[str] = []
     field_mismatches: List[str] = []
@@ -221,7 +230,7 @@ def compute_diff(
         name = entry["name"]
         declared_domain_names.add(name)
         declared_methods = {
-            method: _norm(str(sig))
+            method: normalize_signature(str(sig))
             for method, sig in (entry.get("methods") or {}).items()
         }
         if name not in observed_domain:
