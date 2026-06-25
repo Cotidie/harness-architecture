@@ -80,7 +80,8 @@ generalization lands only in 4+ slices.
 | 7 | Structured intended-architecture layer (light) | Convert the intended layer from prose to structured data (`contracts.yaml`, `domain-model.yaml` alongside `boundaries.yaml`); reconciliation and gate 2 become a mechanical diff of structured-intended vs CodeGraph-observed, not prose judgment. |
 | 8 | Convention-driven, framework-agnostic model (light) | Surveyor writes a convention profile (language, layer roles, vocabulary, signature idiom) along UNIVERSAL axes; agent prompts read the profile instead of assuming DDD. The harness branches on no framework name (no framework list to maintain), so it fits any layout, not only this Python repo. |
 | 8.5 | Unified, profile-driven check surface (light) | Consolidate the accreting committed checks (boundaries linter, drift_scan, intended_diff) behind ONE `harness check` entrypoint that reads paths from `profile.yaml` instead of hardcoding `src/`: one combined report, one exit code, any repo layout. |
-| 9 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
+| 9a | Polyglot enforcement: edges (light) | The harness's boundary checking reads import edges from the CodeGraph index (schema-guarded DB read) instead of Python `ast`, so it works across languages. Sample linter stays `ast`. |
+| 9b | Polyglot enforcement: mechanical gate 2 (light) | Read method/function signatures from CodeGraph; make gate 2 a deterministic signature diff and retire the LLM-judged gate 2. Contract field diffing stays `ast` (the index has no field nodes). |
 | 10 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
 ---
@@ -515,8 +516,23 @@ generalization lands only in 4+ slices.
 - **Out of scope:** the CodeGraph-index observed adapter (iteration 9); product/dogfood split and
   packaging (iteration 10).
 
-## Iteration 9 — Polyglot enforcement *(light — added 2026-06-25 from feedback)*
+## Iteration 9: Polyglot enforcement *(light, added 2026-06-25; spiked + split 2026-06-25)*
 
+- **Feasibility spike result (2026-06-25), which split this iteration.** Ran the gate before
+  planning. CodeGraph stores, deterministically and language-tagged: **import edges** (`import`
+  nodes + `imports` edges, with file + line) and **method/function signatures** (the `signature`
+  field, matching the iter-7 `ast` output). It does NOT store **class field structure** (no
+  field node kind; a dataclass class node carries only its line span). The CLI is search-oriented,
+  so full enumeration reads `codegraph.db` directly, guarded by its `schema_versions` table.
+  Decisions from this: CodeGraph backs edges (9a) and method signatures (9b); contract field
+  diffing stays `ast`; read the DB directly with a schema-version guard.
+- **Split into 9a + 9b** (small, dogfoodable ships):
+  - **9a (detailed in [`11-iteration-9a-codegraph-edges-plan.md`](11-iteration-9a-codegraph-edges-plan.md)):** the harness's boundary checking
+    (`harness_check` boundary check + `drift_scan`) reads import edges from the CodeGraph index
+    via a schema-guarded adapter, producing the unchanged `ImportEdge` / `ScanResult` contract.
+    The sample linter CLI stays `ast` (it is the Python dogfood, not the harness). Polyglot.
+  - **9b:** read method signatures from the same adapter, make gate 2 a deterministic signature
+    diff, and retire the LLM-judged gate 2. Contract field diffing remains `ast` (Python).
 - **Goal:** Make the *enforcement* gate language-agnostic. Iteration 8 lets the harness
   describe a non-Python repo; iteration 9 lets it actually *check* one.
 - **User-facing value:** The validation gate (iter 4) runs on a TypeScript or Java repo and
