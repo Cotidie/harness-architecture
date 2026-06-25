@@ -11,7 +11,7 @@
 ## Locked decisions (from planning forks, 2026-06-25)
 
 - **Approval is unforgeable via skill-pause.** After the Architect writes the patch, the skill STOPS and yields control to the human; it cannot proceed without a real user turn. The model cannot fabricate a human message, so an agent can never self-approve. The skill must not tick the patch checkbox itself; the human's reply is the approval. (Closes iter-4 finding #1.)
-- **MVP + grounded signatures scope.** Build: the loop, the unforgeable approval pause, the orchestrator executing the mechanical gate-1 itself (not trusting the Inspector's self-report, iter-4 finding #2), and **grounded Architect signatures** (the Architect derives each declared seam signature from its CodeGraph query and shows current -> proposed, so gate 2's baseline is real, not invented). Grounded signatures are pulled into this slice because an invented declared signature becomes a wrong gate-2 baseline and yields a false ACCEPT, which is a correctness hole, not polish. Explicitly **deferred to iter 5b / 6** (marked below, not built here): CodeGraph freshness *verification* gate (plain sync only this slice), budget metering, and the REJECT -> auto-revise loop with a max-iteration cap.
+- **MVP + grounded signatures scope.** Build: the loop, the unforgeable approval pause, the orchestrator executing the mechanical gate-1 itself (not trusting the Inspector's self-report, iter-4 finding #2), and **grounded Architect signatures** (the Architect derives each declared seam signature from its CodeGraph query and shows current -> proposed, so gate 2's baseline is real, not invented). Grounded signatures are pulled into this slice because an invented declared signature becomes a wrong gate-2 baseline and yields a false ACCEPT, which is a correctness hole, not polish. Explicitly **deferred to iter 6** (marked below, not built here): CodeGraph freshness *verification* gate (plain sync only this slice), budget metering, and the REJECT -> auto-revise loop with a max-iteration cap.
 - **Auto-commit on ACCEPT.** The patch was already human-approved and the Inspector accepted, so the orchestrator commits code + artifacts together and reports the SHA. Non-ACCEPT verdicts STOP and surface the report (no auto-revise this slice).
 
 ## Global Constraints
@@ -83,7 +83,7 @@ description: Drive one feature through the Living Architecture loop - conditiona
 - [ ] **Step 6: Step 5, Inspector for judgment.** If gate 1 passed, dispatch `inspector` told that gate 1 already passed, to perform gate 2 (seam-signature conformance) + the reconciliation check and emit the final label + report. (Note for a follow-up: trim the Inspector's now-redundant self-run of gate 1; out of scope here.)
 - [ ] **Step 7: Step 6, on ACCEPT auto-commit.** If the verdict is ACCEPT / ACCEPT WITH DOC UPDATE: apply any approved doc update, then `git add` code + tests + `.architecture/` (patch, report, docs), commit with a clear message, capture `git rev-parse HEAD`, write that SHA into `state.yaml` (`last_validated_commit`, `last_reconciled_commit`, time, decision), and `git commit --amend --no-edit` so state ships in the same commit. Report the SHA. On any non-ACCEPT verdict: STOP, surface the report, await the human (no auto-revise this slice).
 - [ ] **Step 8: Partial-entry args.** Document `--patch-only` (stop after step 1), `--from-patch <file>` (resume at step 3), `--inspect-only` (run gate 1 + Inspector on the current diff), `--resurvey` / `--no-survey`.
-- [ ] **Step 9: Deferred-features note.** Add a short "Deferred to iter 5b/6" list in the skill: freshness-*verification* gate (plain sync only), budget metering, capped auto-revise loop. So the skill is honest about what it does not yet enforce. (Grounded Architect signatures are IN this slice via Task 1; do not list them as deferred.)
+- [ ] **Step 9: Deferred-features note.** Add a short "Deferred to iter 6" list in the skill: freshness-*verification* gate (plain sync only), budget metering, capped auto-revise loop. So the skill is honest about what it does not yet enforce. (Grounded Architect signatures are IN this slice via Task 1; do not list them as deferred.)
 - [ ] **Step 10: Commit the skill.** `git add .claude/skills/harness-feature/SKILL.md && git commit -m "feat: add harness-feature orchestrator skill (iteration 5)"`
 
 ### Task 4: Dogfood the full loop on a tiny real feature
@@ -117,16 +117,16 @@ description: Drive one feature through the Living Architecture loop - conditiona
 5. On ACCEPT, a feature commit lands with code + artifacts, then a trailing `state.yaml` commit names it (not `--amend`: a commit cannot contain its own SHA, see Results finding 3); tests pass.
 6. A forced gate-1 failure stops the loop with no commit.
 
-## Feedback to collect (feeds iter 5b / 6 / 7)
+## Feedback to collect (feeds iter 6 / 7)
 
 - Did the approval pause feel unforgeable and natural, or clunky (too many turns)?
 - Was orchestrator-run gate 1 clearly more trustworthy than the Inspector's self-report, and is the Inspector's duplicate gate-1 worth trimming now?
 - How often did step-0 want to re-survey, and was the threshold (8) right?
 - Did auto-commit-on-ACCEPT feel safe, or is a pre-commit human glance wanted after all?
 - Did grounding the Architect's signatures actually prevent a bad gate-2 baseline, or was it never at risk on small features (signal on whether it earned its place this slice)?
-- Which remaining deferred control (freshness verification, budget meter, capped revise) is most missed in practice? That orders iter 5b/6.
+- Which remaining deferred control (freshness verification, budget meter, capped revise) is most missed in practice? That orders iter 6.
 
-## Deferred to iter 5b / 6 (explicitly NOT built here)
+## Deferred to iter 6 (explicitly NOT built here)
 
 - CodeGraph freshness-*verification* gate before each query (plain `codegraph sync` only, this slice; verifying the index actually reflects HEAD is deferred).
 - Budget metering by actual tool calls (still self-reported this slice).
@@ -161,14 +161,14 @@ dispatch by name) on the feature `--format json` for the boundaries linter CLI.
 - **Functional smoke:** `... sample sample/boundaries.yaml --format json` emits a valid JSON array
   and exits 1 on the planted violation; default/text path unchanged.
 
-### Findings (feed iter 5b / 6)
+### Findings (feed iter 6)
 
 1. **Step-0 staleness rule over-counts (fixed in the skill).** `git rev-list --count <sha>..HEAD`
    returned 9 (> threshold 8) and would have forced a re-survey, but all 9 commits were
    docs/agent-defs/skill, zero `src/` changes, so there was no observed-architecture drift to
    re-survey. Fixed: the rule now counts code commits only (`... -- src/`).
 2. **Inspector self-bumps state to the wrong SHA under orchestration (fixed via override, design
-   follow-up for 5b).** The Inspector (iter-4 behavior) bumped `state.yaml` to the pre-feature
+   follow-up for iter 6).** The Inspector (iter-4 behavior) bumped `state.yaml` to the pre-feature
    HEAD on ACCEPT. Under the orchestrator the orchestrator owns state, so this targets the wrong
    commit. Worked around by overwriting in step 5; the clean fix is to stop the Inspector
    self-bumping when run under the orchestrator (pair with trimming its redundant gate-1).

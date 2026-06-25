@@ -75,7 +75,7 @@ generalization lands only in 4+ slices.
 | 3 | Scoped coding | Approve a patch → subagent implements *only* it, touching only allowed files, no hidden architecture changes. |
 | 4 | Validation gate + signature gate (light) | After coding, subagent re-checks the diff vs the patch on two gates: boundary-edge linter (zero violations) AND implemented public signatures match the patch's declared seam signatures. Emits ACCEPT / NEEDS REVISION / REJECT. |
 | 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the agents with a conditional Surveyor step-0, the approval gate, and partial-entry args; `state.yaml` + docs update on accept; code + artifacts commit together. |
-| 6 | Budget hardening (light) | Token-budget enforcement + forbidden-behavior guards (cadence triggers moved into iter5). |
+| 6 | Governance + budget hardening (light) | The governance teeth iter 5 deferred (freshness verification, capped REJECT->revise loop, Inspector stops self-bumping/gate-1) + token-budget enforcement + forbidden-behavior guards. |
 | 7 | Structured intended-architecture layer (light) | Convert the intended layer from prose to structured data (`contracts.yaml`, `domain-model.yaml` alongside `boundaries.yaml`); reconciliation and gate 2 become a mechanical diff of structured-intended vs CodeGraph-observed, not prose judgment. |
 | 8 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
 | 9 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
@@ -317,17 +317,33 @@ generalization lands only in 4+ slices.
 - **Slice split decided when detailing (2026-06-25), see [`06-iteration-5-orchestrator-plan.md`](06-iteration-5-orchestrator-plan.md).** The five
   requirements are real but ship in two slices to dogfood sooner. **Iter 5 builds:** unforgeable
   approval, orchestrator-runs-gate-1, grounded Architect signatures (the correctness-critical
-  one, kept in because a wrong baseline is a false ACCEPT), and plain `codegraph sync`. **Iter 5b
-  defers:** CodeGraph freshness *verification* (beyond plain sync) and the capped REJECT -> revise
-  loop. Budget metering stays iter 6 as before.
+  one, kept in because a wrong baseline is a false ACCEPT), and plain `codegraph sync`. **Iter 6
+  absorbs the rest** (the deferred governance teeth, originally tagged "5b"): CodeGraph freshness
+  *verification* (beyond plain sync), the capped REJECT -> revise loop, and stopping the Inspector
+  self-bumping state / re-running gate 1 under orchestration, plus budget metering as before.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
-## Iteration 6 — Budget hardening *(light — re-planned from feedback)*
+## Iteration 6 — Governance + budget hardening *(light — re-planned from feedback)*
 
-- **Goal:** Enforce the token budget (design §3) across the loop and tighten the
+- **Goal:** Finish hardening the orchestrator's controls (the governance teeth iteration 5
+  deferred) AND enforce the token budget (design §3) across the loop, tightening the
   forbidden-behavior guards (no whole-repo dumps, no re-querying, no raw payloads).
-- **User-facing value:** The harness stays cheap over many features instead of degrading into
-  repo-wide exploration.
+- **User-facing value:** The loop's controls are complete (no honor-system gaps left) and the
+  harness stays cheap over many features instead of degrading into repo-wide exploration.
+- **Governance teeth deferred from iter 5 (fold target for the old "5b", 2026-06-25).** Iteration 5
+  shipped the loop with unforgeable approval, orchestrator-run gate 1, and grounded signatures;
+  these three remained. They land here:
+  - **CodeGraph freshness *verification* before each query.** Iter 5 runs plain `codegraph sync`;
+    this iteration verifies the index actually reflects HEAD (the watcher lags writes ~1s) before
+    any agent query, so reconciliation never reads stale edges.
+  - **Capped REJECT -> revise loop.** Iter 5 stops and asks the human on any non-ACCEPT. This
+    iteration makes the Inspector report machine-actionable (which agent to re-invoke, what to
+    change) and adds the `REJECT -> Architect re-scope -> re-approve -> Builder -> Inspector`
+    cycle with a **max-iteration cap** so it cannot ping-pong or dead-end.
+  - **Stop the Inspector self-bumping state under orchestration, and trim its redundant gate 1.**
+    Iter-5 finding 2: the Inspector (iter-4 def) bumps `state.yaml` to the pre-feature HEAD and
+    re-runs gate 1, both now owned by the orchestrator. Under orchestration the Inspector should
+    do gate 2 + verdict only; the orchestrator owns gate 1 and state.
 - **Note:** survey-on-cadence and drift-trend re-survey triggers moved into iteration 5 (the
   orchestrator's conditional step-0 staleness rule), so they are not separate work here.
 - **Budget is metered, not self-reported (from iter-4 user-test).** Today each agent reports its
