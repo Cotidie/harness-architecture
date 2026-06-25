@@ -107,9 +107,11 @@ def compute_results(
     # Resolve once; a profile/path failure means no check can run.
     prev = os.getcwd()
     abs_root = os.path.abspath(repo_root)
-    os.chdir(abs_root)
     try:
         try:
+            # chdir is inside the try: a bad repo_root (nonexistent dir,
+            # file-as-dir) is a could-not-run condition, not a crash.
+            os.chdir(abs_root)
             paths: Paths = resolve_paths(".")
         except _COULD_NOT_RUN as exc:
             return [CheckResult("profile", "error", "could not run: %s" % (exc,))]

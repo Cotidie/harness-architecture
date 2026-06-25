@@ -126,6 +126,13 @@ class HarnessCheckTest(unittest.TestCase):
             results = compute_results(root, scan_fn=scan_imports)
         self.assertEqual(aggregate_exit(results), 2, results)
 
+    def test_bad_repo_root_is_could_not_run_exit_2(self):
+        # A nonexistent repo_root must map to status=error / exit 2, not a
+        # crash. (chdir lives inside the try in compute_results.)
+        results = compute_results("/no/such/harness/dir", scan_fn=scan_imports)
+        self.assertEqual(aggregate_exit(results), 2, results)
+        self.assertTrue(all(r.status == "error" for r in results), results)
+
     def test_only_runs_just_the_named_check(self):
         # gate 1 uses `--only boundaries`: a contract mismatch (intended_diff
         # drift) must NOT make a boundaries-only run report drift.
