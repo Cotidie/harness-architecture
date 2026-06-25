@@ -26,11 +26,11 @@ so dependency structure, domain model, and data contracts evolve on purpose, nev
   survey -> architect -> [approve] -> builder -> inspector. No per-agent skills (kept minimal).
 - **Newly added agents are not dispatchable by name until `/reload-plugins`.** During the
   session that creates an agent def, dispatch its prompt inline via a generic subagent; the
-  named type works after a reload. The iteration 9 install flow includes this reload step.
+  named type works after a reload. The iteration 10 install flow includes this reload step.
 - **Single source per agent = `.claude/agents/<name>.md`.** The separate `/agent-prompts`
   folder from the design is dropped: each agent def is self-contained (frontmatter + prompt
   body in one file), so there is no duplicate prompt copy to drift. Tool portability is not an
-  MVP requirement, and iteration 9 ships a Claude Code plugin anyway.
+  MVP requirement, and iteration 10 ships a Claude Code plugin anyway.
 - **The four agents = Surveyor, Architect, Builder, Inspector** (was Snapshot, Patch, Scoped
   Coding, Validation). Output nouns keep their names (the "patch" file, the validation report).
 - **Dogfood feature = a `boundaries.yaml` linter** — a tool that reads `boundaries.yaml` and
@@ -58,11 +58,13 @@ the agent prompts bake in this repo's `domain/contracts/application/adapters` vo
 the enforcement linter is Python-`ast`-only. The fix is layered by cost. The *intended-
 architecture model* is already framework-agnostic in data (`boundaries.yaml` = named modules +
 path globs + may/must_not_depend_on); only the prompt prose and the scanner are bound. So
-**iteration 7** makes the model framework-aware (a Surveyor-written convention profile replaces
-the hardcoded ontology; the Architect emits seam signatures in the project's idiom), and
-**iteration 8** makes *enforcement* polyglot. Both are sequenced after the loop is proven and
-before packaging — shipping a Python-only-assuming harness to a React or Spring repo would
-mislead. Iterations 1-3 are done and stay intact; this generalization lands only in 4+ slices.
+**iteration 7** structures the intended layer (contracts and domain-model as data, so
+reconciliation becomes a mechanical diff), **iteration 8** makes the model framework-aware (a
+Surveyor-written convention profile replaces the hardcoded ontology; the Architect emits seam
+signatures in the project's idiom), and **iteration 9** makes *enforcement* polyglot. These are
+sequenced after the loop is proven and before packaging — shipping a Python-only-assuming
+harness to a React or Spring repo would mislead. Iterations 1-3 are done and stay intact; this
+generalization lands only in 4+ slices.
 
 ## Overview
 
@@ -74,9 +76,10 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 | 4 | Validation gate + signature gate (light) | After coding, subagent re-checks the diff vs the patch on two gates: boundary-edge linter (zero violations) AND implemented public signatures match the patch's declared seam signatures. Emits ACCEPT / NEEDS REVISION / REJECT. |
 | 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the agents with a conditional Surveyor step-0, the approval gate, and partial-entry args; `state.yaml` + docs update on accept; code + artifacts commit together. |
 | 6 | Budget hardening (light) | Token-budget enforcement + forbidden-behavior guards (cadence triggers moved into iter5). |
-| 7 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
-| 8 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
-| 9 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
+| 7 | Structured intended-architecture layer (light) | Convert the intended layer from prose to structured data (`contracts.yaml`, `domain-model.yaml` alongside `boundaries.yaml`); reconciliation and gate 2 become a mechanical diff of structured-intended vs CodeGraph-observed, not prose judgment. |
+| 8 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
+| 9 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
+| 10 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
 
 ---
 
@@ -236,7 +239,7 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
   the public method signatures of the domain/application entry points the feature touches — not
   prose. Scope is the **seam only**: new/changed contracts and public entry points, never
   private helpers or bodies (the lite-patch path stays signature-free). Signatures here are
-  emitted in this repo's Python idiom; iteration 7 generalizes the idiom per framework profile.
+  emitted in this repo's Python idiom; iteration 8 generalizes the idiom per framework profile.
 - **Prompt caveat (from iter 1-2):** the Inspector (and Surveyor) must treat CodeGraph's
   `tests:` field as *callers*, not test coverage; do not report coverage from it.
 - **Testable conditions (sketch):** a diff that adds a forbidden edge → REJECT on gate 1; a
@@ -278,7 +281,7 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 - **Partial entry via args (not per-agent skills):** `--patch-only` (stop after the Architect),
   `--from-patch <file>` (skip to Builder for an already-approved patch), `--inspect-only`,
   `--resurvey` / `--no-survey`. This covers the non-linear cases with one skill.
-- **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 9.**
+- **Per-agent skills (`/architect`, `/build`, `/inspect`) = future work, decided at iteration 10.**
   For self-host the agents are dispatched as named subagents; whether external users need typed
   per-agent commands is a packaging-time UX call, gated on feedback. Not built in the MVP loop.
 
@@ -309,7 +312,7 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
     seam signatures. The Architect must derive those from CodeGraph (current signatures) and diff
     against its proposal, so the declared seams are grounded, not invented. A wrong declared
     signature otherwise becomes a wrong gate-2 baseline (false ACCEPT). Mechanical/AST-based
-    gate-2 extraction is deferred to iteration 8; grounding the Architect's declaration is the
+    gate-2 extraction is deferred to iteration 9; grounding the Architect's declaration is the
     iter-5 half.
 - Detail deferred. Depends on how much hand-holding iterations 2-4 needed between steps.
 
@@ -333,7 +336,49 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 - Detail deferred. Sequenced before packaging because the loop must be proven cheap before
   it is worth shipping to others.
 
-## Iteration 7 — Framework-aware architecture model *(light — added 2026-06-25 from feedback)*
+## Iteration 7 — Structured intended-architecture layer *(light — added 2026-06-25 from feedback)*
+
+- **Goal:** Move the intended layer from prose to structured data, so reconciliation and the
+  signature gate become a mechanical diff (structured-intended vs CodeGraph-observed) instead of
+  prose judgment. This is the keystone the framework-aware and deterministic-gate work sit on.
+- **User-facing value:** The intended contracts and domain model live as machine-diffable data
+  (`contracts.yaml`, `domain-model.yaml`) you can review in a PR; drift against the code is
+  detected by a deterministic diff, not by a model reading prose.
+- **Why here (before framework-aware and polyglot):** the load-bearing distinction is
+  observed-vs-intended. *Observed* structure (signatures, edges) stays in CodeGraph and is
+  queried per slice; there is no generated observed artifact (it would only duplicate and stale
+  CodeGraph). *Intended* structure cannot come from CodeGraph (intent may deliberately differ
+  from code, and that difference is the drift the harness exists to catch), so it must be a
+  curated, version-controlled, structured artifact. Today it is prose (`domain-model.md`,
+  `data-contracts.md`), which is why it drifts and cannot be checked mechanically. Structuring it
+  is a prerequisite for iter 8 (the convention profile shapes these files) and iter 9 (the
+  deterministic gate-2 diffs against them).
+- **Token reality (why structured + sliced, not a full resident map):** a full fine-grained map
+  of a large repo (around 1000 classes x 5 methods plus edges) is roughly 90k tokens, too big to
+  hold resident. So the intended artifacts hold only the **seam worth preserving**
+  (boundary-crossing contracts + key domain classes, a fraction of all classes), staying a few k
+  tokens, near-resident or cheaply sliced. The full observed map stays in CodeGraph, queried per
+  task, never resident.
+- **Features introduced (sketch):**
+  - `contracts.yaml` — intended data contracts as data: name, layer, fields + types, which
+    boundary each crosses. Replaces the prose `data-contracts.md`.
+  - `domain-model.yaml` — intended domain classes as data: name, layer, responsibility,
+    invariants, public method signatures. Replaces the prose `domain-model.md`.
+  - Surveyor emits these structured (seeds from CodeGraph, human curates). The Architect's patch
+    sections 7-8 become structured diffs to them, and the iter-4 seam signatures become entries
+    in these files rather than free text.
+  - Reconciliation reads them as data: for each intended entry, compare the CodeGraph-observed
+    signature and diff. This is what makes gate-2 mechanical (delivered fully in iter 9).
+- **Fork resolved (2026-06-25):** observed structured map = CodeGraph itself (queried per slice,
+  no generated observed artifact); intended structured layer = these new curated YAML files.
+- **Testable conditions (sketch):** `contracts.yaml` + `domain-model.yaml` exist, describe this
+  repo's seam, and a deterministic diff against CodeGraph shows ALIGNED for the current code; a
+  planted intended-vs-code mismatch is reported as drift by the diff, not by prose reading.
+- **Risks / open decisions:** how much of the domain to capture as intended (seam only, not every
+  class, to stay compact); whether `architecture.md` stays prose (narrative) while contracts and
+  domain-model go structured (recommended: yes, narrative stays prose, definitions go structured).
+
+## Iteration 8 — Framework-aware architecture model *(light — added 2026-06-25 from feedback)*
 
 - **Goal:** Stop the harness from assuming one project's ontology. Make the intended-
   architecture model derive from whatever framework the target repo actually uses, so the same
@@ -346,8 +391,8 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
   (`boundaries.yaml` = named modules + globs + dependency rules). What is bound is (a) agent
   **prompt prose** (`architect.md` mandates "domain class / no module-level business function /
   no raw dict across a boundary", `surveyor.md` seeds DDD layers) and (b) the **signature
-  idiom**. Both are cheap to generalize and must precede packaging (iter 9) — you cannot ship a
-  Python-DDD-assuming harness to other stacks. Enforcement stays Python-only until iter 8.
+  idiom**. Both are cheap to generalize and must precede packaging (iter 10) — you cannot ship a
+  Python-DDD-assuming harness to other stacks. Enforcement stays Python-only until iter 9.
 - **Features introduced (sketch):**
   - **Convention profile** — a new Surveyor-written artifact (e.g. `.architecture/profile.yaml`)
     capturing detected framework, layer vocabulary, naming rules, and signature idiom
@@ -368,15 +413,15 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 - **Risks / open decisions:** how far detection goes vs always asking the user; whether the
   profile is one file or folded into `architecture.md`. Decide when detailing, from iters 4-6
   feedback. Enforcement (running the linter) on non-Python repos is explicitly OUT — that is
-  iteration 8.
+  iteration 9.
 
-## Iteration 8 — Polyglot enforcement *(light — added 2026-06-25 from feedback)*
+## Iteration 9 — Polyglot enforcement *(light — added 2026-06-25 from feedback)*
 
-- **Goal:** Make the *enforcement* gate language-agnostic. Iteration 7 lets the harness
-  describe a non-Python repo; iteration 8 lets it actually *check* one.
+- **Goal:** Make the *enforcement* gate language-agnostic. Iteration 8 lets the harness
+  describe a non-Python repo; iteration 9 lets it actually *check* one.
 - **User-facing value:** The validation gate (iter 4) runs on a TypeScript or Java repo and
   reports boundary violations there, so the whole loop — not just the docs — works off Python.
-- **Why separate from iter 7:** the current scanner is Python-`ast`-only
+- **Why separate from iter 8:** the current scanner is Python-`ast`-only
   (`src/adapters/boundaries/python_import_scanner.py`); supporting TS/Java imports is a real
   parser/data-source lift, the most expensive piece of generalization. Sequenced after the
   cheap model generalization and validated like everything else on a real sample first.
@@ -398,7 +443,7 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
   — surface it to the user when detailing. Relative/aliased imports per language are an edge
   set to enumerate then.
 
-## Iteration 9 — Packaging & install (Claude Code plugin) *(light — re-planned from feedback)*
+## Iteration 10 — Packaging & install (Claude Code plugin) *(light — re-planned from feedback)*
 
 - **Goal:** Turn the proven, repo-local harness into something a user installs into any repo,
   not files they hand-copy.
@@ -408,7 +453,7 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
 - **Packaging decision (locked): Claude Code plugin.** The system is entirely Claude Code
   artifacts (self-contained agent defs + a setup skill + the `/.architecture` scaffold), so it
   ships as a plugin in a marketplace rather than a binary or template repo.
-- **Likely shape (re-planned from what iters 1–8 prove must ship):**
+- **Likely shape (re-planned from what iters 1–9 prove must ship):**
   - Plugin bundles `.claude/agents/*` (surveyor, architect, builder, inspector), the
     `/harness-feature` orchestrator skill (iter 5), and a `harness-init` setup skill.
   - `harness-init` scaffolds `/.architecture` into the target repo, checks CodeGraph is present
@@ -421,8 +466,8 @@ mislead. Iterations 1-3 are done and stay intact; this generalization lands only
     general-purpose dispatch. `harness-init` must verify the four agents resolve by name (and
     block / instruct the reload if not) so a fresh install's first loop does not silently run on
     the fallback path.
-- **Open / depends-on:** which files actually need to ship (decided by iters 1–8, including the
+- **Open / depends-on:** which files actually need to ship (decided by iters 1–9, including the
   convention profile and any polyglot scanner), and whether CodeGraph install can be
   checked/guided by the setup skill or stays fully manual.
 - Detail deferred. Sequenced last: packaging is only worth doing once the loop is proven cheap,
-  useful, and framework-general (iters 1–8).
+  useful, and framework-general (iters 1–9).
