@@ -122,3 +122,12 @@ All clean could-not-run, no traceback.
 
 1. **The checks match `boundaries.yaml` globs against RELATIVE paths.** The linter/`drift_scan` resolve a file's module by longest glob-prefix (`src/domain/**`), which only matches when paths are repo-root-relative. So `harness_check` chdir's to the repo root and resolves paths relative to it (resolver joins are `normpath`-ed to strip `./`). This path-matching convention is a coupling to remember when iter 9 swaps the observed source to the CodeGraph index: the index will report its own path form, so the glob-matching layer may need to normalize against it.
 2. **`source_root` is single-valued.** Fine for self-host and most repos; a monorepo with multiple roots is deferred to packaging.
+
+### Multi-agent system test (cli-user-test, 2026-06-25)
+
+Drove the harness (orchestrator + agent defs + the new surface), not the sample linter. The unified surface itself works (one report, correct aggregate exit, profile-driven on a non-`src` layout, robust partial-failure aggregation, clean adversarial exit 2). Two INTEGRATION gaps were found and fixed in commit `0440e5e`:
+
+- **#1 (fixed): gate 1 still hardcoded `src` + the direct linter CLI**, bypassing the unified surface, so the per-feature gate would break on a non-`src` repo even though step 0b worked. Added `--only <check>` to `harness_check`; gate 1 (step 4) now runs `harness_check --only boundaries` (profile-driven, linter-only; the full drift scan is deliberately NOT used at gate 1 because a legitimate new contract/signature is expected to differ from the docs until the patch's doc update lands, which is the Inspector's reconciliation job).
+- **#2 (fixed): the orchestrator had no defined behavior for exit 2.** Step 0b now branches: `1` (drift) surfaces and continues, `2` (could-not-run) STOPs as a check failure (routing to the Surveyor when the cause is "no profile yet"), instead of silently proceeding as if clean.
+
+Deferred (packaging / iter 10, already on the roadmap): the `python -m scripts.X` launch form couples running to the harness repo (a console entrypoint / `harness-check` skill is needed for cross-repo install); `harness_check` hard-depends on the full surveyed artifact set; exit-code precedence (error > drift > clean) can hide a drift behind a could-not-run, now documented in the skill.
