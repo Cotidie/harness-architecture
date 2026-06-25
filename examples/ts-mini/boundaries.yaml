@@ -1,0 +1,9 @@
+modules:
+  domain:
+    path: "examples/ts-mini/domain/**"
+    may_depend_on: []
+    must_not_depend_on: [adapters]
+  adapters:
+    path: "examples/ts-mini/adapters/**"
+    may_depend_on: [domain]
+    must_not_depend_on: []
