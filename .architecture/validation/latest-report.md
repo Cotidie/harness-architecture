@@ -1,59 +1,64 @@
-# Validation Report
+# Validation Report: `--format json` output for the boundaries linter CLI
 
-Patch: `.architecture/patches/2026-06-25-may-only-depend-on.md`
-Commit under validation: `9289b056beb285f595ff8d4a44b256a1dfc923d0`
-Validation time: 2026-06-24T18:33:22Z
+Patch: `.architecture/patches/2026-06-25-format-json.md`
+Feature slug: format-json
+Commit validated: 4f623d054dcaba82cddb632e25f0fc75110dcdf5
+Validation time: 2026-06-25T08:42:34Z
 
 ## Decision: ACCEPT
 
-Both gates pass and the full check list holds.
+Gate 2 conforms and the full design check list holds (Gate 1 passed mechanically upstream).
 
-## Gate 1 - boundary edges + tests
+## Gate 1 - boundary edges + tests (run by orchestrator, PASSED)
 
-- Tests: PASS. `python -m unittest discover -s tests` ran 52 tests, OK.
+- Tests: PASS. `python -m unittest discover -s tests` ran 70 tests, OK.
 - Self-check: PASS. `python -m src.adapters.boundaries.cli src .architecture/boundaries.yaml`
-  reported "No boundary violations found." (exit 0). (The sample/ fixture line is the
-  by-design fixture, not src/.)
-- Scope: PASS. Every changed source/test/doc file is in the patch's "Files allowed to edit":
-  `src/contracts/boundaries/module_rule.py`, `src/domain/boundaries/boundary_rule_set.py`,
-  `src/application/boundaries/lint_boundaries.py`,
-  `src/adapters/boundaries/boundaries_config_loader.py`, `.architecture/data-contracts.md`,
-  `tests/test_boundary_rule_set.py`, `tests/test_contracts.py`, `tests/test_integration.py`.
-  The patch file itself is the approved patch (not drift).
+  exit 0, zero violations.
+- Scope: PASS. Changed files are exactly the 4 patch-allowed files:
+  `src/adapters/boundaries/cli.py`, `src/adapters/boundaries/violation_reporter.py`,
+  `tests/test_integration.py`, new `tests/test_violation_reporter.py`. No out-of-scope edit.
 
 ## Gate 2 - seam-signature conformance
 
-One `codegraph_explore` query over the declared seams. Each compared to the patch:
+One `codegraph_explore` query over the declared seams. Each implemented signature compared to the
+patch's `## Seam signatures (Inspector gate 2)` block:
 
-- `ModuleRule(name, path_glob, may_depend_on, must_not_depend_on, may_only_depend_on)`: MATCH.
-  New field is `Tuple[str, ...]` with `field(default_factory=tuple)`, matching the declared
-  optional empty-tuple default.
-- `BoundaryRuleSet.from_rules(rules: Iterable[Mapping[str, object]]) -> BoundaryRuleSet`: MATCH.
-  Signature unchanged; reads the new optional key via `raw.get("may_only_depend_on", ()) or ()`.
-- `BoundaryRuleSet.check(source_module: Optional[str], target_module: Optional[str], file_path: str, line: int) -> List[BoundaryDecision]`:
-  MATCH. Signature unchanged; gains the allowlist branch (target known and absent from a
-  present, non-empty allowlist) emitting `rule_kind="may_only_depend_on"`.
-- `BoundaryDecision(source_module: str, target_module: str, rule_kind: str, file_path: str, line: int)`:
-  MATCH. Unchanged; `rule_kind` is a free string now also carrying `"may_only_depend_on"`.
+- `BoundaryViolation(source_module: str, target_module: str, rule_kind: str, file_path: str, line: int)`:
+  MATCH (unchanged; contract file not edited, not in patch scope).
+- `format_violation(violation: BoundaryViolation) -> str` (violation_reporter.py:10): MATCH (unchanged).
+- `format_report(violations: Sequence[BoundaryViolation]) -> str` (violation_reporter.py:30): MATCH (unchanged).
+- `format_report_json(violations: Sequence[BoundaryViolation]) -> str` (violation_reporter.py:40):
+  MATCH (NEW; signature identical to declared, sibling to `format_report`, same input type).
+- `run(target_dir: str, boundaries_file: str, output_format: str = "text") -> int` (cli.py:28):
+  MATCH (defaulted `output_format` added exactly as declared; exit-code logic and the
+  `matched_file_count == 0` could-not-run guard preserved).
+- `main(argv: Sequence[str]) -> int` (cli.py:49): MATCH (signature unchanged; internal parsing moved
+  to argparse with two positionals plus `--format {text,json}` default `text`; misuse caught via
+  `SystemExit` maps to exit 2).
 
-No seam renamed, removed, or signature-changed. No interface drift.
+No seam renamed, removed, or signature-changed inside or outside the patch scope. No interface drift.
 
 ## Full check list
 
-- Observed dependencies match the patch: PASS (no new edges).
-- No forbidden / unapproved edge, no new cycle: PASS (self-check clean; domain still
-  imports only stdlib, application maps the new field into a plain dict for `from_rules`).
-- No public interface drift outside the patch: PASS.
-- No raw boundary payload: PASS. `ModuleRule` carries the new field across the YAML-load
-  boundary; application maps to a plain dict only as a domain input (not across a boundary).
-- No duplicated contract class; contract change approved: PASS. One optional field added to
-  `ModuleRule`; `rule_kind` value-space expansion, both authorized in patch sections 8 and 11.
-- Business logic in a domain class: PASS. Allowlist decision lives in `BoundaryRuleSet.check`,
-  not a module-level function.
-- Required tests pass: PASS.
-- Doc update: data-contracts.md update (new field + expanded `rule_kind` value set) is already
-  included in this commit, so no doc update is deferred.
+- Observed dependencies match the patch: PASS. Only stdlib `json` and `dataclasses` imports added,
+  internal to `adapters`, crossing no module boundary.
+- No forbidden / unapproved edge, no new cycle: PASS (self-check clean).
+- No public interface drift outside the patch: PASS (all six seams match).
+- No raw boundary payload: PASS. The JSON output (`dataclasses.asdict(v)` -> `json.dumps`) serializes
+  the existing `BoundaryViolation` contract one-to-one over the same reporter -> stdout seam the text
+  report already crosses; it is not a new cross-module contract.
+- No duplicated contract class; contract change approved: PASS. `BoundaryViolation` unchanged (no
+  field, type, or `rule_kind` value added); no new contract introduced.
+- Business logic in a domain class: PASS / N/A. Output serialization is presentation and stays in the
+  `adapters` reporter, consistent with the existing `format_report`. No module-level business logic.
+- Required tests pass: PASS (70 tests; new `tests/test_violation_reporter.py` covers the formatters).
+- Doc update: none deferred. No intended doc requires a change.
 
 ## CodeGraph query used (count: 1)
 
-`ModuleRule contract fields, BoundaryRuleSet.from_rules, BoundaryRuleSet.check, BoundaryDecision dataclass signatures`
+`BoundaryViolation format_report format_violation format_report_json run main argparse --format`
+
+## Drift / violations found
+
+None.
+</content>

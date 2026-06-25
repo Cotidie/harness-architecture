@@ -1,5 +1,7 @@
 """Adapter: format BoundaryViolation contracts for output."""
 
+import dataclasses
+import json
 from typing import Sequence
 
 from src.contracts.boundaries.boundary_violation import BoundaryViolation
@@ -33,3 +35,11 @@ def format_report(violations: Sequence[BoundaryViolation]) -> str:
         "%d boundary violation(s) found." % (len(violations),)
     )
     return "\n".join(lines)
+
+
+def format_report_json(violations: Sequence[BoundaryViolation]) -> str:
+    # Serialize the existing contract one-to-one: each JSON array element
+    # carries exactly the BoundaryViolation fields. This adds no behavior
+    # beyond serialization; presentation stays in the adapters reporter.
+    payload = [dataclasses.asdict(v) for v in violations]
+    return json.dumps(payload)
