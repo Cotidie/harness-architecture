@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import os
 import tempfile
 import textwrap
@@ -303,6 +304,104 @@ class CleanTreeExitTests(unittest.TestCase):
                 os.chdir(cwd)
         self.assertEqual(code, 0)
         self.assertIn("No boundary violations found.", out.getvalue())
+
+
+class FormatFlagTests(unittest.TestCase):
+    """CLI --format selection, exit codes, and default-text behavior."""
+
+    def _main_on_sample(self, *extra):
+        # The sample YAML globs are repo-root relative, so run from there
+        # with relative paths (matches the existing sample CLI tests).
+        cwd = os.getcwd()
+        os.chdir(REPO_ROOT)
+        try:
+            with _capture() as (out, err):
+                code = cli.main(
+                    ["sample", "sample/boundaries.yaml", *extra]
+                )
+        finally:
+            os.chdir(cwd)
+        return code, out, err
+
+    def test_default_no_flag_prints_text_on_sample(self):
+        code, out, err = self._main_on_sample()
+        self.assertEqual(code, 1)
+        output = out.getvalue()
+        self.assertIn("boundary violation(s) found.", output)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(output)
+
+    def test_format_text_matches_default(self):
+        code, out, err = self._main_on_sample("--format", "text")
+        self.assertEqual(code, 1)
+        self.assertIn("boundary violation(s) found.", out.getvalue())
+
+    def test_format_json_prints_parseable_json_no_text(self):
+        code, out, err = self._main_on_sample("--format", "json")
+        self.assertEqual(code, 1)
+        output = out.getvalue()
+        payload = json.loads(output)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["source_module"], "domain")
+        self.assertEqual(payload[0]["target_module"], "contracts")
+        self.assertEqual(payload[0]["rule_kind"], "must_not_depend_on")
+        self.assertNotIn("boundary violation(s) found.", output)
+
+    def test_invalid_format_value_exit_2(self):
+        with _capture() as (out, err):
+            code = cli.main(
+                [
+                    os.path.join(REPO_ROOT, "sample"),
+                    os.path.join(REPO_ROOT, "sample/boundaries.yaml"),
+                    "--format",
+                    "xml",
+                ]
+            )
+        self.assertEqual(code, 2)
+
+    def test_clean_tree_json_exit_0_empty_array(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            domain = os.path.join(tmp, "pkg", "domain")
+            os.makedirs(domain)
+            with open(os.path.join(domain, "ok.py"), "w") as handle:
+                handle.write("x = 1\n")
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with _capture() as (out, err):
+                    code = cli.main(["pkg", "boundaries.yaml", "--format", "json"])
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.getvalue()), [])
+
+    def test_could_not_run_json_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = os.path.join(tmp, "empty")
+            os.makedirs(empty)
+            cfg = os.path.join(tmp, "boundaries.yaml")
+            with open(cfg, "w", encoding="utf-8") as handle:
+                handle.write(_BOUNDARIES_YAML)
+            with _capture() as (out, err):
+                code = cli.main([empty, cfg, "--format", "json"])
+        self.assertEqual(code, 2)
+        self.assertIn("error:", err.getvalue())
+
+    def test_run_accepts_output_format_json(self):
+        cwd = os.getcwd()
+        os.chdir(REPO_ROOT)
+        try:
+            with _capture() as (out, err):
+                code = cli.run(
+                    "sample", "sample/boundaries.yaml", output_format="json"
+                )
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(json.loads(out.getvalue())), 1)
 
 
 if __name__ == "__main__":
