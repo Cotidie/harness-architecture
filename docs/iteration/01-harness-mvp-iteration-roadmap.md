@@ -59,9 +59,10 @@ the enforcement linter is Python-`ast`-only. The fix is layered by cost. The *in
 architecture model* is already framework-agnostic in data (`boundaries.yaml` = named modules +
 path globs + may/must_not_depend_on); only the prompt prose and the scanner are bound. So
 **iteration 7** structures the intended layer (contracts and domain-model as data, so
-reconciliation becomes a mechanical diff), **iteration 8** makes the model framework-aware (a
-Surveyor-written convention profile replaces the hardcoded ontology; the Architect emits seam
-signatures in the project's idiom), and **iteration 9** makes *enforcement* polyglot. These are
+reconciliation becomes a mechanical diff), **iteration 8** makes the model convention-driven and
+framework-AGNOSTIC (a Surveyor-written convention profile along universal axes replaces the
+hardcoded DDD ontology; the harness branches on no framework name, it reads layer roles and
+vocabulary from data), and **iteration 9** makes *enforcement* polyglot. These are
 sequenced after the loop is proven and before packaging — shipping a Python-only-assuming
 harness to a React or Spring repo would mislead. Iterations 1-3 are done and stay intact; this
 generalization lands only in 4+ slices.
@@ -77,7 +78,7 @@ generalization lands only in 4+ slices.
 | 5 | Orchestrator skill + state (light) | `/harness-feature "<request>"` chains the agents with a conditional Surveyor step-0, the approval gate, and partial-entry args; `state.yaml` + docs update on accept; code + artifacts commit together. |
 | 6 | Governance + budget hardening (light) | The governance teeth iter 5 deferred (freshness verification, capped REJECT->revise loop, Inspector stops self-bumping/gate-1) + token-budget enforcement + forbidden-behavior guards. |
 | 7 | Structured intended-architecture layer (light) | Convert the intended layer from prose to structured data (`contracts.yaml`, `domain-model.yaml` alongside `boundaries.yaml`); reconciliation and gate 2 become a mechanical diff of structured-intended vs CodeGraph-observed, not prose judgment. |
-| 8 | Framework-aware architecture model (light) | Surveyor detects the project's framework and writes a convention profile; agent prompts stop assuming one fixed layer ontology; Architect emits seam signatures in the project's idiom. Harness fits Flask / React / Spring, not only this Python repo. |
+| 8 | Convention-driven, framework-agnostic model (light) | Surveyor writes a convention profile (language, layer roles, vocabulary, signature idiom) along UNIVERSAL axes; agent prompts read the profile instead of assuming DDD. The harness branches on no framework name (no framework list to maintain), so it fits any layout, not only this Python repo. |
 | 8.5 | Unified, profile-driven check surface (light) | Consolidate the accreting committed checks (boundaries linter, drift_scan, intended_diff) behind ONE `harness check` entrypoint that reads paths from `profile.yaml` instead of hardcoding `src/`: one combined report, one exit code, any repo layout. |
 | 9 | Polyglot enforcement (light) | Boundary checking works across languages (TS / Java / ...) by leaning on CodeGraph edges or a multi-language scanner, so the validation gate can actually run on a non-Python repo. |
 | 10 | Packaging & install (light) | `/plugin install` the harness into any repo, then one `harness-init` + survey to bootstrap. |
@@ -426,15 +427,19 @@ generalization lands only in 4+ slices.
      generalization smell that iteration 8 (framework-aware idioms) must address, and iteration 9
      should pair with semantic, language-aware signature comparison.
 
-## Iteration 8 — Framework-aware architecture model *(light — added 2026-06-25 from feedback)*
+## Iteration 8: Convention-driven, framework-agnostic model *(light, added 2026-06-25 from feedback)*
 
-- **Goal:** Stop the harness from assuming one project's ontology. Make the intended-
-  architecture model derive from whatever framework the target repo actually uses, so the same
-  agents work on a Flask, React, or Spring repo, not only this Python/DDD self-host.
-- **User-facing value:** You run the Surveyor on a Flask (blueprints / models / services), a
-  React (features / components / hooks), or a Spring (controller / service / repository) repo
-  and the generated `boundaries.yaml` + docs name *that* framework's idiomatic modules, instead
-  of a `domain/contracts/application/adapters` template that does not fit.
+- **Framing (corrected 2026-06-25):** NOT "framework-aware". The harness must branch on no
+  framework name (there are too many to enumerate). It is convention-driven along UNIVERSAL axes:
+  language, layer roles, vocabulary, signature idiom. Any project fills those in; knowing a
+  specific framework is at most an optional starter-preset (a data template), never code.
+- **Goal:** Stop the harness from assuming one project's ontology. Make the intended-architecture
+  model read the project's conventions from a data profile, so the same agents work on any layout,
+  not only this Python/DDD self-host, without the harness recognizing or branching on frameworks.
+- **User-facing value:** You run the Surveyor on any repo (Flask blueprints/models/services, React
+  components/hooks, Spring controller/service/repository, or anything) and the generated docs name
+  *that project's* modules, because the agents read layer roles and vocabulary from the profile,
+  not from a baked `domain/contracts/application/adapters` template.
 - **Why now (not earlier, not later):** the *model* is already framework-agnostic in data
   (`boundaries.yaml` = named modules + globs + dependency rules). What is bound is (a) agent
   **prompt prose** (`architect.md` mandates "domain class / no module-level business function /
@@ -442,13 +447,16 @@ generalization lands only in 4+ slices.
   idiom**. Both are cheap to generalize and must precede packaging (iter 10) — you cannot ship a
   Python-DDD-assuming harness to other stacks. Enforcement stays Python-only until iter 9.
 - **Features introduced (sketch):**
-  - **Convention profile** — a new Surveyor-written artifact (e.g. `.architecture/profile.yaml`)
-    capturing detected framework, layer vocabulary, naming rules, and signature idiom
-    (Python dataclass vs TS interface vs Java interface). This single artifact is what "honors
-    the existing structure": the Architect reads it instead of assuming DDD layers.
-  - **Surveyor framework detection** — from CodeGraph + manifest files (`requirements.txt`,
-    `package.json`, `pom.xml`/`build.gradle`), propose the idiomatic module map as the *seed*,
-    user edits/confirms. Never impose; detect then confirm.
+  - **Convention profile:** a new Surveyor-written artifact (`.architecture/profile.yaml`)
+    capturing language, layer ROLES (behavior / boundary-shape / entrypoint / io), vocabulary
+    (what this project calls a boundary shape and a behavior unit), and signature idiom. A
+    free-text `label` is documentation only; nothing branches on it. This artifact is what
+    "honors the existing structure": the agents read it instead of assuming DDD layers.
+  - **Surveyor profile detection (no framework classifier):** a committed `detect_profile`
+    reports language, the raw manifest deps verbatim, and the candidate top-level layers from
+    `requirements.txt` / `package.json` / `pom.xml` / layout. It does NOT classify a framework
+    and does NOT map layers to roles; the human confirms the role mapping. Detect-then-confirm,
+    never impose, never a maintained list of frameworks.
   - **De-hardcoded agent prompts** — Surveyor and Architect read the profile for vocabulary and
     rules; the `domain/contracts/application/adapters` set becomes *one example profile*, not
     the law baked into prose.
@@ -465,6 +473,7 @@ generalization lands only in 4+ slices.
   profile is one file or folded into `architecture.md`. Decide when detailing, from iters 4-6
   feedback. Enforcement (running the linter) on non-Python repos is explicitly OUT — that is
   iteration 9.
+- **DONE (2026-06-25), see [`09-iteration-8-framework-aware-plan.md`](09-iteration-8-framework-aware-plan.md).** Shipped `profile.yaml`, the committed `detect_profile` seed tool, de-hardcoded agent prompts, and a layout-only `examples/flask-mini/` fixture proving detection names the project's layers, not DDD. **Corrected mid-iteration to framework-AGNOSTIC** (commit `ae1c846`): removed `detect_profile`'s framework classifier and demoted the `framework:` field to a free-text `label`, because the agents branch only on the universal axes, never on a framework name. Open gap: `python-ddd` is still the only fully-exercised profile; the agents-read-the-profile claim is proven by the fixture's detection layer + inspection, not a second end-to-end loop (packaging / follow-up).
 
 ## Iteration 8.5: Unified, profile-driven check surface *(light, added 2026-06-25 from iter-8 retro)*
 

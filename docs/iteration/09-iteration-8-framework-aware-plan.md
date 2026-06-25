@@ -91,8 +91,8 @@ Mirror the committed-script pattern: a `compute_profile_seed(target_dir, source_
 ## Testable conditions (iteration acceptance)
 
 - `.architecture/profile.yaml` exists, parses, and its roles match the self-host layers.
-- `python -m scripts.detect_profile . src` reports python + the src layers + `python/unknown`, leaving roles to confirm.
-- `detect_profile` on the flask-mini fixture reports `python/flask` and names `blueprints/models/services`, NOT `domain/contracts/adapters`.
+- `python -m scripts.detect_profile . src` reports python + the detected deps + the src layers, leaving roles (and the free-text label) to confirm.
+- `detect_profile` on the flask-mini fixture reports language python, the flask dep, and names `blueprints/models/services`, NOT `domain/contracts/adapters`.
 - `architect.md` and `surveyor.md` read the boundary/behavior NOUNS from `profile.yaml`; the universal principles remain; no stale iter-7 idiom pointer.
 - Full test suite passes; the fixture creates no false drift in the existing scans.
 
@@ -117,8 +117,8 @@ Built Tasks 1-5: `.architecture/profile.yaml` (self-host `python-ddd`), the comm
 
 **Outcome: iteration shipped.**
 
-- **Detection generalizes (headline proof).** `detect_profile` on `examples/flask-mini/` reports `framework_guess == "python/flask"` and `candidate_layers == (blueprints, models, services)`, and explicitly NOT `domain/contracts/adapters`. The ontology now comes from the repo, not from baked prose.
-- **Honest on the self-host.** `python -m scripts.detect_profile . src` reports `python/unknown` (no web-framework lib in `requirements.txt`) and the four `src/` layers, leaving the role mapping blank for the human. Detect-then-confirm, not silent-auto.
+- **Detection generalizes (headline proof).** `detect_profile` on `examples/flask-mini/` reports `language == python`, `flask` among the detected deps, and `candidate_layers == (blueprints, models, services)`, explicitly NOT `domain/contracts/adapters`. The ontology comes from the repo, not from baked prose. (Initially this also emitted a `framework_guess == "python/flask"` label; see the correction below, which removed the framework classifier.)
+- **Honest on the self-host.** `python -m scripts.detect_profile . src` reports `language == python`, the `pyyaml` dep, and the four `src/` layers, leaving the role mapping blank for the human. Detect-then-confirm, not silent-auto.
 - **Ontology de-hardcoded.** `architect.md` now states the universal principles (no raw payload across a boundary; behavior is a named unit) and reads the NOUNS (`vocabulary.boundary_shape`, `vocabulary.behavior_unit`) and layers (`roles.*`) from `profile.yaml`. The DDD specifics are the `python-ddd` profile's values, not law. `surveyor.md` runs `detect_profile` as a seed, writes/confirms `profile.yaml` (now its first of ten outputs), and uses the profile's vocabulary. Two stale iter-7 pointers fixed (read the YAML definition layer; idiom pointer now points at iter 8/9).
 
 ### Adversarial pass (cli-user-test style on detect_profile)
@@ -126,7 +126,7 @@ Built Tasks 1-5: `.architecture/profile.yaml` (self-host `python-ddd`), the comm
 - no args -> usage on stderr, exit 2;
 - empty dir -> `unknown`/`unknown`, exit 0 (advisory tool, no drift exit code);
 - nonexistent `source_dir` -> framework still guessed from the manifest, candidate layers empty, no crash;
-- manifest with no known lib -> `python/unknown`;
+- manifest with no known lib -> still `language == python`, deps reported verbatim;
 - only non-code dirs -> `unknown`, `(none detected)` layers.
 
 ### Findings / remaining gaps
@@ -134,3 +134,15 @@ Built Tasks 1-5: `.architecture/profile.yaml` (self-host `python-ddd`), the comm
 1. **`python-ddd` is still the only fully-exercised profile.** The fixture proves the DETECTION layer generalizes and the prompts now read the profile (verified by inspection: the nouns resolve from `profile.yaml`). What is NOT proven this slice is an end-to-end Surveyor->Architect->Builder loop on a real other-framework repo, because that needs a CodeGraph-indexed second app. Recorded as a packaging-time (iter 10) / follow-up validation, consistent with the plan.
 2. **Detection is intentionally shallow on roles.** `detect_profile` names the framework from manifest libs and lists candidate layers but never maps layers to roles, by design (a built-in role heuristic would re-bake an ontology). The role mapping is a human confirm, so a wrong confirmation still shapes downstream work; the profile is a reviewable PR artifact precisely to surface that.
 3. **Signature idiom recorded, not yet normalized.** `profile.yaml.signature_idiom` captures the Python form; the iter-7 literal-type-string brittleness (`Tuple` vs `tuple`) is unchanged and still deferred to iteration 9's semantic comparison.
+
+### Post-iteration correction (2026-06-25): framework-AGNOSTIC, not framework-aware
+
+A review question exposed that "framework-aware" oversold and slightly mis-designed this slice. The agents never branched on a framework anyway: they read abstract `roles` + `vocabulary` from `profile.yaml`, which is framework-agnostic by construction (one data-driven mechanism, no per-framework code). The only framework-ENUMERATING bits were vestigial: `detect_profile`'s `KNOWN_LIBS` classifier (a curated list of frameworks, which cannot enumerate them all) and a load-bearing-looking `framework:` field that nothing keyed off.
+
+Corrected in commit `ae1c846`:
+
+- `detect_profile` no longer classifies a framework. It reports `language`, the raw manifest dependencies verbatim, and the candidate layers. `ProfileSeed.framework_guess` was removed.
+- `profile.yaml`'s `framework:` is demoted to a free-text `label:` documented as "nothing branches on it".
+- Agent prose (`surveyor.md`, `architect.md`) and the tests/fixture were updated to the agnostic framing; 98 tests still pass.
+
+The takeaway, folded into the roadmap: the harness's generalization is **convention-driven along universal axes** (language, layer roles, boundary-shape and behavior-unit vocabulary, signature idiom), never framework recognition. Knowing a specific framework is useful only as OPTIONAL starter-profile presets (data templates a user picks), never as code branches.
